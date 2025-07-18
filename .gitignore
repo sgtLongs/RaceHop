@@ -1,0 +1,38 @@
+# --- Unity generated / cache ---
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+UserSettings/
+
+# --- VS / JetBrains / Rider / VSCode ---
+.vs/
+*.csproj
+*.sln
+*.user
+*.unityproj
+*.pidb
+*.suo
+*.userprefs
+*.ide/
+.idea/
+.vscode/
+
+# --- OS crap ---
+.DS_Store
+Thumbs.db
+
+# --- Crash/Reports ---
+sysinfo.txt
+
+# --- Addressables / Cache (optional keep if you need custom modded data) ---
+/ServerData/
+
+# --- If using Collaborate (legacy) artifacts ---
+/Collab/
+
+# --- Unity Cloud Build manifest (auto) ---
+/unitycloudbuild-manifest.json
