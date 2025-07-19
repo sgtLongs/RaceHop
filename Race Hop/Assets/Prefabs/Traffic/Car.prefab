@@ -13,9 +13,11 @@ GameObject:
   - component: {fileID: 6313234738633941373}
   - component: {fileID: 8800178749080196181}
   - component: {fileID: 6130504927127558998}
+  - component: {fileID: 4222233078733283447}
+  - component: {fileID: 1965148104985298119}
   m_Layer: 0
   m_Name: Car
-  m_TagString: Untagged
+  m_TagString: Car
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -122,14 +124,48 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   moveForward: 1
+  currentLane: {fileID: 0}
+  deleteThreshold: 1
+  checkAheadDistance: 15
+  rearCheckDistance: 8
+  gizmoShowForwardZones: 1
+  gizmoShowBackwardZones: 1
+  gizmoShowAheadBehindLinks: 1
+  gizmoShowCourtesyZone: 1
+  gizmoShowLaneChangeTarget: 1
+  gizmoShowSpeedLabel: 1
+--- !u!114 &4222233078733283447
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8151563143112849927}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 97d8fc6cd1af376488f5d03e92d88694, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  laneChangeSpeed: 1
+  courtesyCooldown: 2
+  showCourtesyZone: 1
+--- !u!114 &1965148104985298119
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8151563143112849927}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 44eaddd6ef2158f419864b44f53ad431, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
   maxForwardSpeed: 10
   forwardAcceleration: 5
+  brakingMultiplier: 8
   backwardSpeed: 5
-  deleteThreshold: 2
-  currentLane: {fileID: 0}
-  backwardBoostMultiplier: 3
+  backwardBoostMultiplier: 1.5
   backwardBoostLerpSpeed: 4
   backwardRecoverLerpSpeed: 2
-  laneChangeSpeed: 5
-  checkAheadDistance: 10
-  currentSpeed: 0
+  gizmoShowSpeedLabel: 1

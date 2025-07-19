@@ -25,8 +25,10 @@ public class GameController : MonoBehaviour
 
 		if (spawnTimer >= spawnInterval)
 		{
+			
+
 			// Only spawn if below cap (or cap disabled)
-			if (maxCars <= 0 || activeCars.Count < maxCars)
+			if (maxCars <= 0 || GameObject.FindGameObjectsWithTag("Car").Length < maxCars)
 			{
 				spawnTimer -= spawnInterval; // keep leftover fraction
 				TrySpawnCar();
