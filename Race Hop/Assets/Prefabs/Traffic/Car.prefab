@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: 6130504927127558998}
   - component: {fileID: 4222233078733283447}
   - component: {fileID: 1965148104985298119}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Car
   m_TagString: Car
   m_Icon: {fileID: 0}
@@ -97,7 +97,7 @@ BoxCollider:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8151563143112849927}
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 13400000, guid: ac6c314be7987a64f9336dd255d2f844, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
