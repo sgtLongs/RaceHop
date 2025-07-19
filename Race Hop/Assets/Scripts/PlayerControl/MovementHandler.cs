@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 [RequireComponent(typeof(ControlObserver))]
 [RequireComponent(typeof(Rigidbody))]
@@ -25,7 +25,25 @@ public class MovementHandler : MonoBehaviour
 	public float yawLerpSpeed = 720f;
 
 	[Header("Sprint")]
-	private bool sprinting; 
+	private bool sprinting;
+
+	[Header("Crouch")]
+	public bool enableCrouch = true;
+	public bool useToggleFromObserver = false;
+	public float standingHeight = 2.0f;
+	public float crouchHeight = 1.2f;
+	[Tooltip("Speed multiplier while crouched.")]
+	public float crouchSpeedMultiplier = 0.55f;
+	[Tooltip("Lerp speed for height & camera.")]
+	public float crouchTransitionSpeed = 10f;
+	[Tooltip("Local Y for camera when standing (eye).")]
+	public float standingEyeHeight = 1.7f;
+	[Tooltip("Local Y for camera when crouched.")]
+	public float crouchedEyeHeight = 1.0f;
+	[Tooltip("Layer mask for checking head clearance when uncrouching.")]
+	public LayerMask ceilingMask = ~0;
+	[Tooltip("Extra head clearance margin before allowing stand up.")]
+	public float headClearanceBuffer = 0.05f;
 
 	// -------- Jump Parameters --------
 	[Header("Jump")]
@@ -50,6 +68,13 @@ public class MovementHandler : MonoBehaviour
 	[Tooltip("Upward offset from transform.position to start the sphere cast (if your pivot is at the feet keep small).")]
 	public float groundProbeOriginOffset = 0.05f;
 
+	private CapsuleCollider capsule;
+	public Transform cameraPivot;
+
+	private bool isCrouching;
+	private float currentTargetHeight;
+
+
 	// Jump / Ground state
 	private bool isGrounded;
 	private float lastGroundedTime;
@@ -72,7 +97,11 @@ public class MovementHandler : MonoBehaviour
 	void Awake()
 	{
 		controlObserver = GetComponent<ControlObserver>();
+		capsule = GetComponent<CapsuleCollider>();
 		rb = GetComponent<Rigidbody>();
+
+		currentTargetHeight = standingHeight;
+		groundProbeRadius = Mathf.Min(groundProbeRadius, capsule.radius * 0.95f);
 
 		// Prevent tipping
 		rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
@@ -84,6 +113,11 @@ public class MovementHandler : MonoBehaviour
 	void Update()
 	{
 		SetDesiredVelocity();
+
+		if (enableCrouch)
+		{
+			HandleCrouchInput();
+		}
 
 		if (controlObserver.ConsumeJump())
 		{
@@ -104,6 +138,39 @@ public class MovementHandler : MonoBehaviour
 			rb.AddForce(Vector3.down * extraGravity, ForceMode.Acceleration);
 		}
 	}
+
+	void LateUpdate()
+	{
+		if (!enableCrouch) return;
+
+		float currentHeight = capsule.height;
+		float targetHeight = currentTargetHeight;
+
+		if (!Mathf.Approximately(currentHeight, targetHeight))
+		{
+			float newHeight = Mathf.MoveTowards(currentHeight, targetHeight, crouchTransitionSpeed * Time.deltaTime);
+			capsule.height = newHeight;
+			// HERE replace the feet‑pivot line with center‑pivot adjustment:
+			float heightDelta = standingHeight - capsule.height;
+			capsule.center = new Vector3(0, -heightDelta * 0.5f, 0);
+
+		}
+
+		// Recompute isCrouching flag (actual state, not just intent)
+		isCrouching = capsule.height < (standingHeight - 0.01f);
+
+		// Adjust camera pivot Y (if assigned)
+		if (cameraPivot)
+		{
+			float targetEye = (targetHeight == crouchHeight) ? crouchedEyeHeight : standingEyeHeight;
+			Vector3 lp = cameraPivot.localPosition;
+			lp.y = Mathf.MoveTowards(lp.y, targetEye, crouchTransitionSpeed * Time.deltaTime);
+			cameraPivot.localPosition = lp;
+		}
+
+		// Speed multiplier already handled in CalculateTargetSpeed via sprint; add crouch there:
+	}
+
 
 	/**
 	 * PLANAR MOVEMENT
@@ -173,14 +240,19 @@ public class MovementHandler : MonoBehaviour
 		if (controlObserver != null)
 		{
 			bool movingForward = controlObserver.MoveDirection.y > 0.01f;
-			sprinting = controlObserver.SprintHeld && movingForward;
+			sprinting = controlObserver.SprintHeld && movingForward && !isCrouching; // usually disallow sprint while crouched
 		}
 
-		float targetSpeed = maxSpeed * (sprinting ? sprintMultiplier : 1f);
+		float speed = maxSpeed;
+		if (sprinting)
+			speed *= sprintMultiplier;
+		if (isCrouching)
+			speed *= crouchSpeedMultiplier;
 
-		return targetSpeed;
+		return speed;
 	}
-	
+
+
 
 	private void ResetVelocityIfTurningThresholdIsReached()
 	{
@@ -269,6 +341,11 @@ public class MovementHandler : MonoBehaviour
 
 	private void PerformJump(bool groundOrCoyote)
 	{
+		if (isCrouching && HasHeadClearance())
+		{
+			currentTargetHeight = standingHeight;
+		}
+
 		// Calculate vertical velocity needed for desired jump height (classic v = sqrt(2gh))
 		float jumpVelocity = Mathf.Sqrt(2f * Mathf.Abs(Physics.gravity.y) * jumpHeight);
 
@@ -285,9 +362,76 @@ public class MovementHandler : MonoBehaviour
 
 	public void SetSprinting(bool value) => sprinting = value;
 
+	/**
+	 * CROUCH
+	 */
+	private void HandleCrouchInput()
+	{
+		bool inputCrouch = controlObserver.CrouchHeld;
+
+		if (inputCrouch)
+		{
+			// Enter / remain crouched
+			currentTargetHeight = crouchHeight;
+		}
+		else
+		{
+			// Try to stand
+			if (HasHeadClearance())
+			{
+				currentTargetHeight = standingHeight;
+			}
+			else
+			{
+				// Force staying crouched due to obstruction
+				currentTargetHeight = crouchHeight;
+			}
+		}
+	}
+
+	private bool HasHeadClearance()
+	{
+		// Feet pivot assumption: capsule bottom at y=0 (center = height*0.5)
+		float standCenterY = standingHeight * 0.5f;
+		Vector3 center = transform.position + Vector3.up * standCenterY;
+		float radius = capsule.radius * 0.95f;
+		float halfHeight = (standingHeight * 0.5f) - radius;
+
+		// Use an overlap capsule between bottom & top extents
+		Vector3 point1 = transform.position + Vector3.up * radius;
+		Vector3 point2 = transform.position + Vector3.up * (standingHeight - radius);
+
+		// If anything blocks, cannot stand
+		return !Physics.CheckCapsule(point1, point2, radius - 0.01f, ceilingMask, QueryTriggerInteraction.Ignore);
+	}
+
+
 #if UNITY_EDITOR
 	void OnDrawGizmosSelected()
 	{
+		Gizmos.color = Color.cyan;
+		if (capsule)
+		{
+			// Draw capsule approximate (top & bottom spheres)
+			float h = capsule.height;
+			float r = capsule.radius;
+			Vector3 bottom = transform.position + Vector3.up * r;
+			Vector3 top = transform.position + Vector3.up * (h - r);
+			Gizmos.DrawWireSphere(bottom, r);
+			Gizmos.DrawWireSphere(top, r);
+
+			// Head clearance indicator when trying to stand
+			if (enableCrouch && currentTargetHeight == standingHeight && capsule.height < standingHeight)
+			{
+				Gizmos.color = HasHeadClearance() ? Color.green : Color.red;
+				float standR = r;
+				Vector3 sBottom = transform.position + Vector3.up * standR;
+				Vector3 sTop = transform.position + Vector3.up * (standingHeight - standR);
+				Gizmos.DrawWireSphere(sTop, standR * 0.9f);
+				Gizmos.DrawLine(sBottom, sTop);
+			}
+		}
+
 		Gizmos.color = Color.yellow;
 		Gizmos.DrawLine(transform.position, transform.position + desiredVelocity);
 		Gizmos.color = Color.green;

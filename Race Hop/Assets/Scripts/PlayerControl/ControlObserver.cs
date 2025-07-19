@@ -10,6 +10,8 @@ public class ControlObserver : MonoBehaviour
 	public Vector2 LookDelta;
 	public bool SprintHeld;
 	private bool jumpQueued;
+	public bool CrouchHeld;
+
 	private void Awake()
 	{
 		controls = new PlayerControls();
@@ -28,6 +30,9 @@ public class ControlObserver : MonoBehaviour
 
 		controls.Gameplay.Jump.performed += _ => jumpQueued = true;
 
+		controls.Gameplay.Crouch.performed += OnCrouchPerformed;
+		controls.Gameplay.Crouch.canceled += OnCrouchCanceled;
+
 		controls.Enable();
 	}
 
@@ -43,6 +48,9 @@ public class ControlObserver : MonoBehaviour
 		controls.Gameplay.Sprint.canceled -= OnSprintCanceled;
 
 		controls.Gameplay.Jump.performed -= _ => jumpQueued = true;
+
+		controls.Gameplay.Crouch.performed -= OnCrouchPerformed;
+		controls.Gameplay.Crouch.canceled -= OnCrouchCanceled;
 
 		controls.Disable();
 	}
@@ -69,7 +77,15 @@ public class ControlObserver : MonoBehaviour
 	}
 	private void OnSprintCanceled(InputAction.CallbackContext _) => SprintHeld = false;
 
-	
+	private void OnCrouchPerformed(InputAction.CallbackContext ctx)
+	{
+		CrouchHeld = true;
+	}
+
+	private void OnCrouchCanceled(InputAction.CallbackContext ctx)
+	{
+		CrouchHeld = false;
+	}
 
 	public bool ConsumeJump()
 	{
