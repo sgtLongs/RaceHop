@@ -21,13 +21,10 @@ public class MovementHandler : MonoBehaviour
 
 	[Header("Camera / Yaw")]
 	public Transform cameraTransform;
-	[Tooltip("If true, player yaw follows camera yaw every frame.")]
-	public bool syncYawToCamera = true;
 	[Tooltip("Degrees per second for yaw alignment (set high for instant).")]
 	public float yawLerpSpeed = 720f;  // big number ~= snap
 
 	[Header("Sprint")]
-	public bool enableSprint = false;
 	private bool sprinting;            // Set via SetSprinting or future input
 
 	// References
@@ -50,75 +47,71 @@ public class MovementHandler : MonoBehaviour
 			cameraTransform = Camera.main.transform;
 	}
 
+	//Get Desired Velocity
 	void Update()
 	{
-		// 1. Read raw input (already updated before Update by Input System)
-		Vector2 input = controlObserver.MoveDirection;   // (x = right, y = forward)
+		SetDesiredVelocity();
+	}
 
-		float targetSpeed = maxSpeed * (enableSprint && sprinting ? sprintMultiplier : 1f);
+	private void SetDesiredVelocity()
+	{
+		Vector2 input = controlObserver.MoveDirection;
+		float targetSpeed = CalculateTargetSpeed();
 
-		// 2. Prepare a stable camera basis BEFORE possibly adjusting player yaw
 		Vector3 camFwd = Vector3.forward;
 		Vector3 camRight = Vector3.right;
 
+		(camFwd, camRight) = SetCameraFacingNormals(camFwd, camRight);
+
+		if (input.sqrMagnitude > 0.0001f)
+		{
+			desiredVelocity = CalculateDesiredVelocity(input, targetSpeed, camFwd, camRight);
+		}
+		else
+		{
+			desiredVelocity = Vector3.zero;
+		}
+	}
+
+	private Vector3 CalculateDesiredVelocity(Vector2 input, float targetSpeed, Vector3 camFwd, Vector3 camRight)
+	{
+		Vector3 moveDir = (camRight * input.x + camFwd * input.y);
+		if (moveDir.sqrMagnitude > 1f) moveDir.Normalize();
+		return moveDir * targetSpeed;
+	}
+
+	private (Vector3, Vector3) SetCameraFacingNormals(Vector3 camFwd, Vector3 camRight)
+	{
 		if (cameraTransform)
 		{
 			camFwd = cameraTransform.forward; camFwd.y = 0f; camFwd.Normalize();
 			camRight = cameraTransform.right; camRight.y = 0f; camRight.Normalize();
 		}
 
-		// 3. Build desired horizontal velocity
-		if (input.sqrMagnitude > 0.0001f)
+		return (camFwd, camRight);
+	}
+
+	private float CalculateTargetSpeed()
+	{
+		if (controlObserver != null)
 		{
-			Vector3 moveDir = (camRight * input.x + camFwd * input.y);
-			if (moveDir.sqrMagnitude > 1f) moveDir.Normalize(); // diagonals
-			desiredVelocity = moveDir * targetSpeed;
-		}
-		else
-		{
-			desiredVelocity = Vector3.zero;
+			bool movingForward = controlObserver.MoveDirection.y > 0.01f;
+			sprinting = controlObserver.SprintHeld && movingForward;
 		}
 
-		// 4. Yaw alignment (FPS pattern). Player yaw matches camera yaw; movement DOES NOT rotate player.
-		if (syncYawToCamera && cameraTransform)
-		{
-			float camYaw = cameraTransform.eulerAngles.y;
-			Quaternion targetYaw = Quaternion.Euler(0f, camYaw, 0f);
-			// Lerp by angular speed (deg/sec)
-			if (yawLerpSpeed <= 0f)
-			{
-				transform.rotation = targetYaw;
-			}
-			else
-			{
-				transform.rotation = Quaternion.RotateTowards(
-					transform.rotation,
-					targetYaw,
-					yawLerpSpeed * Time.deltaTime
-				);
-			}
-		}
+		float targetSpeed = maxSpeed * (sprinting ? sprintMultiplier : 1f);
+
+		return targetSpeed;
 	}
+
 
 	void FixedUpdate()
 	{
-		float dt = Time.fixedDeltaTime;
+		float deltaTime = Time.fixedDeltaTime;
 
-		// 5. Optional hard reverse snap (usually disabled for strafing)
-		if (zeroOnHardReverse &&
-			desiredVelocity != Vector3.zero &&
-			planarVelocity != Vector3.zero)
-		{
-			float dot = Vector3.Dot(planarVelocity.normalized, desiredVelocity.normalized);
-			if (dot < directionFlipThreshold)
-				planarVelocity = Vector3.zero;
-		}
+		ResetVelocityIfTurningThresholdIsReached();
 
-		// 6. Choose tau based on speeding up vs slowing down
-		bool speedingUp = desiredVelocity.sqrMagnitude >
-						  planarVelocity.sqrMagnitude + 0.0001f;
-
-		float tau = speedingUp ? accelTau : decelTau;
+		float tau = CalculateTau();
 
 		if (tau <= 0f)
 		{
@@ -126,13 +119,34 @@ public class MovementHandler : MonoBehaviour
 		}
 		else
 		{
-			float alpha = 1f - Mathf.Exp(-dt / Mathf.Max(0.0001f, tau));
+			float alpha = 1f - Mathf.Exp(-deltaTime / Mathf.Max(0.0001f, tau));
 			planarVelocity += (desiredVelocity - planarVelocity) * alpha;
 		}
 
-		// 7. Apply horizontal velocity; keep vertical component (gravity, future jump)
-		Vector3 current = rb.linearVelocity;
-		rb.linearVelocity = new Vector3(planarVelocity.x, current.y, planarVelocity.z);
+		rb.linearVelocity = new Vector3(planarVelocity.x, rb.linearVelocity.y, planarVelocity.z);
+	}
+
+	private void ResetVelocityIfTurningThresholdIsReached()
+	{
+		if (zeroOnHardReverse &&
+					desiredVelocity != Vector3.zero &&
+					planarVelocity != Vector3.zero)
+		{
+			float dot = Vector3.Dot(planarVelocity.normalized, desiredVelocity.normalized);
+
+			if (dot < directionFlipThreshold)
+			{
+				planarVelocity = Vector3.zero;
+			}
+		}
+	}
+
+	private float CalculateTau()
+	{
+		bool speedingUp = desiredVelocity.sqrMagnitude > planarVelocity.sqrMagnitude + 0.0001f;
+
+		float tau = speedingUp ? accelTau : decelTau;
+		return tau;
 	}
 
 	// Public API to set sprint state (wire up later)
