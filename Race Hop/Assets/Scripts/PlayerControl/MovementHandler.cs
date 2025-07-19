@@ -127,8 +127,6 @@ public class MovementHandler : MonoBehaviour
 	private Vector3 _platformVelocity;
 
 	private Vector3 _lastPlatformVelocity;
-	private float _lastPlatformContactTime;
-	private bool _withinCoyoteFromPlatform => (Time.time - _lastPlatformContactTime) <= CoyoteTime;
 
 
 	private bool _inheritedOnLeavePlatform;
@@ -152,11 +150,6 @@ public class MovementHandler : MonoBehaviour
 	// Frozen horizontal platform velocity captured when leaving ground or jumping off a platform
 	private Vector3 _frozenCarryVelocity;
 	private bool _hasFrozenCarry;
-
-
-
-
-
 
 
 	#endregion
@@ -371,7 +364,6 @@ public class MovementHandler : MonoBehaviour
 			_platformVelocity = Vector3.zero;
 			_platformJustSet = false;
 
-			_lastPlatformContactTime = Time.time;
 			_lastPlatformVelocity = _platformVelocity;
 			return;
 		}
@@ -387,7 +379,6 @@ public class MovementHandler : MonoBehaviour
 		}
 
 		_lastPlatformVelocity = _platformVelocity;
-		_lastPlatformContactTime = Time.time;
 		_platformLastPos = currentPos;
 	}
 
