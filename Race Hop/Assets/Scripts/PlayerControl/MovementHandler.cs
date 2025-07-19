@@ -141,25 +141,25 @@ public class MovementHandler : MonoBehaviour
 
 	void LateUpdate()
 	{
+		AdjustTransformsForCrouching();
+	}
+
+	private void AdjustTransformsForCrouching()
+	{
 		if (!enableCrouch) return;
 
 		float currentHeight = capsule.height;
 		float targetHeight = currentTargetHeight;
 
-		if (!Mathf.Approximately(currentHeight, targetHeight))
-		{
-			float newHeight = Mathf.MoveTowards(currentHeight, targetHeight, crouchTransitionSpeed * Time.deltaTime);
-			capsule.height = newHeight;
-			// HERE replace the feet‑pivot line with center‑pivot adjustment:
-			float heightDelta = standingHeight - capsule.height;
-			capsule.center = new Vector3(0, -heightDelta * 0.5f, 0);
+		CalculateCapsuleHeightAndCenter(currentHeight, targetHeight);
 
-		}
-
-		// Recompute isCrouching flag (actual state, not just intent)
 		isCrouching = capsule.height < (standingHeight - 0.01f);
 
-		// Adjust camera pivot Y (if assigned)
+		MoveCamera(targetHeight);
+	}
+
+	private void MoveCamera(float targetHeight)
+	{
 		if (cameraPivot)
 		{
 			float targetEye = (targetHeight == crouchHeight) ? crouchedEyeHeight : standingEyeHeight;
@@ -167,8 +167,18 @@ public class MovementHandler : MonoBehaviour
 			lp.y = Mathf.MoveTowards(lp.y, targetEye, crouchTransitionSpeed * Time.deltaTime);
 			cameraPivot.localPosition = lp;
 		}
+	}
 
-		// Speed multiplier already handled in CalculateTargetSpeed via sprint; add crouch there:
+	private void CalculateCapsuleHeightAndCenter(float currentHeight, float targetHeight)
+	{
+		if (!Mathf.Approximately(currentHeight, targetHeight))
+		{
+			float newHeight = Mathf.MoveTowards(currentHeight, targetHeight, crouchTransitionSpeed * Time.deltaTime);
+			capsule.height = newHeight;
+			float heightDelta = standingHeight - capsule.height;
+			capsule.center = new Vector3(0, -heightDelta * 0.5f, 0);
+
+		}
 	}
 
 
@@ -346,11 +356,10 @@ public class MovementHandler : MonoBehaviour
 			currentTargetHeight = standingHeight;
 		}
 
-		// Calculate vertical velocity needed for desired jump height (classic v = sqrt(2gh))
 		float jumpVelocity = Mathf.Sqrt(2f * Mathf.Abs(Physics.gravity.y) * jumpHeight);
 
 		Vector3 v = rb.linearVelocity;
-		if (v.y < 0f) v.y = 0f;    // remove downward momentum
+		if (v.y < 0f) v.y = 0f;
 		v.y = jumpVelocity;
 		rb.linearVelocity = v;
 
@@ -371,19 +380,16 @@ public class MovementHandler : MonoBehaviour
 
 		if (inputCrouch)
 		{
-			// Enter / remain crouched
 			currentTargetHeight = crouchHeight;
 		}
 		else
 		{
-			// Try to stand
 			if (HasHeadClearance())
 			{
 				currentTargetHeight = standingHeight;
 			}
 			else
 			{
-				// Force staying crouched due to obstruction
 				currentTargetHeight = crouchHeight;
 			}
 		}
@@ -391,17 +397,14 @@ public class MovementHandler : MonoBehaviour
 
 	private bool HasHeadClearance()
 	{
-		// Feet pivot assumption: capsule bottom at y=0 (center = height*0.5)
 		float standCenterY = standingHeight * 0.5f;
 		Vector3 center = transform.position + Vector3.up * standCenterY;
 		float radius = capsule.radius * 0.95f;
 		float halfHeight = (standingHeight * 0.5f) - radius;
 
-		// Use an overlap capsule between bottom & top extents
 		Vector3 point1 = transform.position + Vector3.up * radius;
 		Vector3 point2 = transform.position + Vector3.up * (standingHeight - radius);
 
-		// If anything blocks, cannot stand
 		return !Physics.CheckCapsule(point1, point2, radius - 0.01f, ceilingMask, QueryTriggerInteraction.Ignore);
 	}
 
@@ -412,7 +415,6 @@ public class MovementHandler : MonoBehaviour
 		Gizmos.color = Color.cyan;
 		if (capsule)
 		{
-			// Draw capsule approximate (top & bottom spheres)
 			float h = capsule.height;
 			float r = capsule.radius;
 			Vector3 bottom = transform.position + Vector3.up * r;
@@ -420,7 +422,6 @@ public class MovementHandler : MonoBehaviour
 			Gizmos.DrawWireSphere(bottom, r);
 			Gizmos.DrawWireSphere(top, r);
 
-			// Head clearance indicator when trying to stand
 			if (enableCrouch && currentTargetHeight == standingHeight && capsule.height < standingHeight)
 			{
 				Gizmos.color = HasHeadClearance() ? Color.green : Color.red;
