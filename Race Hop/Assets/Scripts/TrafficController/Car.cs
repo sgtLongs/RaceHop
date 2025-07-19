@@ -51,9 +51,16 @@ public class Car : MonoBehaviour
 
 	void Update()
 	{
+		float distanceAhead = float.MaxValue;
+
+		Car carAhead = null;
+		
+
+		carAhead = laneHandler.GetCarAhead(currentLane, this, out distanceAhead);
+
 		if (moveForward)
 		{
-			HandleForwardMovement();
+			HandleForwardMovement(carAhead, distanceAhead);
 		}
 		else
 		{
@@ -64,19 +71,24 @@ public class Car : MonoBehaviour
 		Vector3 direction = moveForward ? transform.forward : -transform.forward;
 		transform.position += direction * currentSpeed * Time.deltaTime;
 
+		if (!isChangingLane &&
+		currentLane != null &&
+		laneHandler != null &&
+		distanceAhead < checkAheadDistance)
+		{
+			TryChangeLaneIfBlocked();
+		}
+
 		// Lifecycle
 		CheckForEndOfLane();
 	}
 
 	private void HandleBackwardMovement()
 	{
-		// Base target = normal backward cruising speed
 		float baseSpeed = backwardSpeed;
 
-		// Compute “half detection” distance
 		float halfCheck = checkAheadDistance;
 
-		// Find a car directly behind (toward lane end) within halfCheck
 		Car carBehind = null;
 		float distanceBehind = float.MaxValue;
 
@@ -94,7 +106,6 @@ public class Car : MonoBehaviour
 
 				float otherDist = Vector3.Dot(other.transform.position - laneStart, laneDir);
 
-				// For a backward-moving car, "behind" (approaching us) means: otherDist > myDist
 				float gap = myDist - otherDist;
 				if (gap > 0f && gap < halfCheck)
 				{
@@ -132,13 +143,9 @@ public class Car : MonoBehaviour
 	}
 
 
-	private void HandleForwardMovement()
+	private void HandleForwardMovement(Car carAhead, float distanceAhead)
 	{
-		float distanceAhead = float.MaxValue;
-		Car carAhead = null;
 		float targetSpeed = maxForwardSpeed;
-
-		carAhead = laneHandler.GetCarAhead(currentLane, this, out distanceAhead);
 
 		if (carAhead != null)
 		{
@@ -147,13 +154,7 @@ public class Car : MonoBehaviour
 
 		currentSpeed = CalculateCurrentSpeed(targetSpeed, carAhead, distanceAhead);
 
-		if (!isChangingLane &&
-		currentLane != null &&
-		laneHandler != null &&
-		distanceAhead < checkAheadDistance)
-		{
-			TryChangeLaneIfBlocked();
-		}
+		
 	}
 
 	private float CalculateCurrentSpeed(float targetSpeed, Car carAhead, float distanceAhead)
@@ -188,7 +189,7 @@ public class Car : MonoBehaviour
 
 	private float CalculateTargetSpeed(float distanceAhead, Car carAhead, float targetSpeed)
 	{
-		float decelZone = checkAheadDistance * 1.5f;
+		float decelZone = checkAheadDistance;
 		float minZone = decelZone * 0.4f;
 		float carAheadSpeed = carAhead.GetCurrentSpeed();
 		float desiredMinSpeed = carAheadSpeed - 1f;

@@ -105,7 +105,6 @@ public class LaneHandler : MonoBehaviour
 		return null; // Neither lane is safe
 	}
 
-
 	private static bool ShouldCarSwitchToLeftLane()
 	{
 		return Random.value > 0.5f;
@@ -231,8 +230,6 @@ public class LaneHandler : MonoBehaviour
 			carComponent.currentLane = chosenLane;
 		}
 	}
-
-
 
 	private Transform ChooseStartPosition(out Lane chosenLane, out bool spawnAtStart, out Transform spawnPoint)
 	{
