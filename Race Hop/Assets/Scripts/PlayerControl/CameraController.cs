@@ -23,31 +23,19 @@ public class CameraController : MonoBehaviour
 
 	[Header("Smoothing (Optional)")]
 	[Tooltip("Enable exponential smoothing of look input.")]
-	public bool smoothingEnabled = false;
+	public bool smoothingEnabled = true;
 	[Tooltip("Seconds (tau) to reach ~63% of a look delta; smaller = snappier.")]
 	public float smoothingTau = 0.05f;
 
 	[Header("Inversion")]
 	public bool invertY = false;
 
-	[Header("Cursor")]
-	public bool lockCursorOnStart = true;
-	public bool hideCursor = true;
-
-	[Header("Zoom / FOV (Optional)")]
-	public bool enableZoom = false;
-	public float zoomStep = 5f;
-	public float minFov = 50f;
-	public float maxFov = 90f;
-	public float fovLerpSpeed = 20f;
-
-	private float yaw;    // Accumulated yaw in degrees
-	private float pitch;  // Accumulated pitch in degrees
+	private float yaw;
+	private float pitch;
 	private Camera cam;
 
 	// For smoothing
 	private Vector2 smoothedLook;
-	private Vector2 lookVelocity; // not "velocity" in physics sense, just tracking
 
 	void Awake()
 	{
@@ -55,15 +43,19 @@ public class CameraController : MonoBehaviour
 		{
 			controlObserver = GetComponentInParent<ControlObserver>();
 			if (!controlObserver)
-				controlObserver = FindObjectOfType<ControlObserver>();
+				controlObserver = FindFirstObjectByType<ControlObserver>();
 		}
 
 		if (!playerYawRoot)
 		{
 			if (transform.parent != null)
+			{
 				playerYawRoot = transform.parent;
+			}
 			else
-				playerYawRoot = transform; // fallback
+			{
+				playerYawRoot = transform;
+			}	
 		}
 
 		cam = GetComponent<Camera>();
@@ -71,21 +63,18 @@ public class CameraController : MonoBehaviour
 
 	void Start()
 	{
-		// Initialize yaw/pitch from starting orientation
 		if (playerYawRoot)
 			yaw = playerYawRoot.eulerAngles.y;
 
 		Vector3 localEuler = transform.localEulerAngles;
-		// Convert to signed pitch
+
 		pitch = localEuler.x;
 		if (pitch > 180f) pitch -= 360f;
 		pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
 
-		if (lockCursorOnStart)
-		{
-			Cursor.lockState = CursorLockMode.Locked;
-			Cursor.visible = !hideCursor;
-		}
+
+		Cursor.lockState = CursorLockMode.Locked;
+		Cursor.visible = false;
 	}
 
 	void Update()
@@ -94,41 +83,24 @@ public class CameraController : MonoBehaviour
 
 		Vector2 rawLook = controlObserver.LookDelta;
 
-		// Distinguish mouse vs controller:
-		bool isStick = IsGamepadRightStick(rawLook);
-
-		Vector2 processed = rawLook;
-
-		if (isStick)
-		{
-			// Stick gives a normalized vector (-1..1). Convert to deg/frame:
-			// degreesPerSecond * deltaTime * stickValue
-			processed.x = rawLook.x * controllerYawSpeed * Time.deltaTime;
-			processed.y = rawLook.y * controllerPitchSpeed * Time.deltaTime;
-		}
-		else
-		{
-			// Mouse delta (already per frame). Apply sensitivity
-			processed *= mouseSensitivity;
-		}
+		Vector2 processed = rawLook * mouseSensitivity;
 
 		if (invertY) processed.y = -processed.y;
 
-		// Optional smoothing (exponential toward processed)
 		if (smoothingEnabled)
 		{
-			float dt = Time.deltaTime;
-			float alpha = 1f - Mathf.Exp(-dt / Mathf.Max(0.0001f, smoothingTau));
-			smoothedLook += (processed - smoothedLook) * alpha;
-			processed = smoothedLook;
+			processed = ApplySmoothingToMouseInput(processed);
 		}
 
-		// Apply
+		ApplyRotationToCamera(processed);
+	}
+
+	private void ApplyRotationToCamera(Vector2 processed)
+	{
 		yaw += processed.x;
-		pitch -= processed.y; // subtract because up mouse = look up (screen coords vs world)
+		pitch -= processed.y;
 		pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
 
-		// Set rotations
 		if (playerYawRoot)
 		{
 			playerYawRoot.rotation = Quaternion.Euler(0f, yaw, 0f);
@@ -137,25 +109,11 @@ public class CameraController : MonoBehaviour
 		transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
 	}
 
-	bool IsGamepadRightStick(Vector2 v)
+	private Vector2 ApplySmoothingToMouseInput(Vector2 processed)
 	{
-		// Heuristic: mouse delta can be large/spiky; stick usually within [-1,1]
-		return Mathf.Abs(v.x) <= 1f && Mathf.Abs(v.y) <= 1f &&
-			   Gamepad.current != null && Gamepad.current.rightStick.IsActuated();
-	}
-
-	// Utility to toggle cursor at runtime (bind to a UI key if desired)
-	public void ToggleCursorLock()
-	{
-		if (Cursor.lockState == CursorLockMode.Locked)
-		{
-			Cursor.lockState = CursorLockMode.None;
-			Cursor.visible = true;
-		}
-		else
-		{
-			Cursor.lockState = CursorLockMode.Locked;
-			Cursor.visible = !hideCursor;
-		}
+		float dt = Time.deltaTime;
+		float alpha = 1f - Mathf.Exp(-dt / Mathf.Max(0.0001f, smoothingTau));
+		smoothedLook += (processed - smoothedLook) * alpha;
+		return smoothedLook;
 	}
 }

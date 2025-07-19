@@ -9,7 +9,7 @@ public class ControlObserver : MonoBehaviour
 	public Vector2 MoveDirection;
 	public Vector2 LookDelta;
 	public bool SprintHeld;
-
+	private bool jumpQueued;
 	private void Awake()
 	{
 		controls = new PlayerControls();
@@ -26,6 +26,8 @@ public class ControlObserver : MonoBehaviour
 		controls.Gameplay.Sprint.performed += OnSprintPerformed;
 		controls.Gameplay.Sprint.canceled += OnSprintCanceled;
 
+		controls.Gameplay.Jump.performed += _ => jumpQueued = true;
+
 		controls.Enable();
 	}
 
@@ -39,6 +41,8 @@ public class ControlObserver : MonoBehaviour
 
 		controls.Gameplay.Sprint.performed -= OnSprintPerformed;
 		controls.Gameplay.Sprint.canceled -= OnSprintCanceled;
+
+		controls.Gameplay.Jump.performed -= _ => jumpQueued = true;
 
 		controls.Disable();
 	}
@@ -64,5 +68,17 @@ public class ControlObserver : MonoBehaviour
 		SprintHeld = true;
 	}
 	private void OnSprintCanceled(InputAction.CallbackContext _) => SprintHeld = false;
+
+	
+
+	public bool ConsumeJump()
+	{
+		if (jumpQueued)
+		{
+			jumpQueued = false;
+			return true;
+		}
+		return false;
+	}
 
 }

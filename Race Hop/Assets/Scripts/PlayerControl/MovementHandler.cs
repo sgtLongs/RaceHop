@@ -17,23 +17,57 @@ public class MovementHandler : MonoBehaviour
 	[Header("Reverse Handling (usually off for FPS)")]
 	[Range(-1f, 1f)]
 	public float directionFlipThreshold = -0.2f;
-	public bool zeroOnHardReverse = false;   // Off by default for strafe movement
+	public bool zeroOnHardReverse = false;
 
 	[Header("Camera / Yaw")]
 	public Transform cameraTransform;
 	[Tooltip("Degrees per second for yaw alignment (set high for instant).")]
-	public float yawLerpSpeed = 720f;  // big number ~= snap
+	public float yawLerpSpeed = 720f;
 
 	[Header("Sprint")]
-	private bool sprinting;            // Set via SetSprinting or future input
+	private bool sprinting; 
+
+	// -------- Jump Parameters --------
+	[Header("Jump")]
+	[Tooltip("Desired jump apex height in meters.")]
+	public float jumpHeight = 1.4f;
+	[Tooltip("Extra mid-air gravity for snappier arc (0 = none).")]
+	public float extraGravity = 0f;
+	[Tooltip("Time after leaving ground you can still press jump (coyote).")]
+	public float coyoteTime = 0.12f;
+	[Tooltip("Time a jump input is buffered before actual landing.")]
+	public float jumpBufferTime = 0.12f;
+	[Tooltip("Number of extra jumps allowed while airborne.")]
+	public int maxAirJumps = 0;
+
+	[Header("Ground Check")]
+	[Tooltip("Layer mask for walkable ground.")]
+	public LayerMask groundMask = ~0;
+	[Tooltip("Radius of the sphere used for ground probing.")]
+	public float groundProbeRadius = 0.35f;
+	[Tooltip("Distance downward to cast from probe origin.")]
+	public float groundProbeDistance = 0.3f;
+	[Tooltip("Upward offset from transform.position to start the sphere cast (if your pivot is at the feet keep small).")]
+	public float groundProbeOriginOffset = 0.05f;
+
+	// Jump / Ground state
+	private bool isGrounded;
+	private float lastGroundedTime;
+	private float lastJumpPressedTime = -999f;
+	private int airJumpsUsed;
+	private bool jumpConsumedThisFrame;
+
+	// For gizmos
+	private RaycastHit lastGroundHit;
+	private bool jumpPossibleNow;
 
 	// References
 	private ControlObserver controlObserver;
 	private Rigidbody rb;
 
 	// State
-	private Vector3 desiredVelocity;    // Target horizontal velocity
-	private Vector3 planarVelocity;     // Smoothed horizontal velocity
+	private Vector3 desiredVelocity;
+	private Vector3 planarVelocity;
 
 	void Awake()
 	{
@@ -47,10 +81,53 @@ public class MovementHandler : MonoBehaviour
 			cameraTransform = Camera.main.transform;
 	}
 
-	//Get Desired Velocity
 	void Update()
 	{
 		SetDesiredVelocity();
+
+		if (controlObserver.ConsumeJump())
+		{
+			lastJumpPressedTime = Time.time;
+		}
+	}
+
+	void FixedUpdate()
+	{
+		ProbeGround();
+
+		HandleJumpLogic();
+
+		ApplyPlanarVelocity();
+
+		if (!isGrounded && extraGravity > 0f)
+		{
+			rb.AddForce(Vector3.down * extraGravity, ForceMode.Acceleration);
+		}
+	}
+
+	/**
+	 * PLANAR MOVEMENT
+	 */
+
+	private void ApplyPlanarVelocity()
+	{
+		float dt = Time.fixedDeltaTime;
+
+		ResetVelocityIfTurningThresholdIsReached();
+
+		float tau = CalculateTau();
+
+		if (tau <= 0f)
+		{
+			planarVelocity = desiredVelocity;
+		}
+		else
+		{
+			float alpha = 1f - Mathf.Exp(-dt / Mathf.Max(0.0001f, tau));
+			planarVelocity += (desiredVelocity - planarVelocity) * alpha;
+		}
+
+		rb.linearVelocity = new Vector3(planarVelocity.x, rb.linearVelocity.y, planarVelocity.z);
 	}
 
 	private void SetDesiredVelocity()
@@ -103,28 +180,7 @@ public class MovementHandler : MonoBehaviour
 
 		return targetSpeed;
 	}
-
-
-	void FixedUpdate()
-	{
-		float deltaTime = Time.fixedDeltaTime;
-
-		ResetVelocityIfTurningThresholdIsReached();
-
-		float tau = CalculateTau();
-
-		if (tau <= 0f)
-		{
-			planarVelocity = desiredVelocity;
-		}
-		else
-		{
-			float alpha = 1f - Mathf.Exp(-deltaTime / Mathf.Max(0.0001f, tau));
-			planarVelocity += (desiredVelocity - planarVelocity) * alpha;
-		}
-
-		rb.linearVelocity = new Vector3(planarVelocity.x, rb.linearVelocity.y, planarVelocity.z);
-	}
+	
 
 	private void ResetVelocityIfTurningThresholdIsReached()
 	{
@@ -149,7 +205,84 @@ public class MovementHandler : MonoBehaviour
 		return tau;
 	}
 
-	// Public API to set sprint state (wire up later)
+	/**
+	 * GROUND CHECK
+	 */
+
+	private void ProbeGround()
+	{
+		Vector3 origin = transform.position + Vector3.up * (groundProbeOriginOffset + groundProbeRadius);
+		float castDistance = groundProbeDistance;
+
+		bool hitSomething = Physics.SphereCast(
+			origin,
+			groundProbeRadius,
+			Vector3.down,
+			out RaycastHit hit,
+			castDistance,
+			groundMask,
+			QueryTriggerInteraction.Ignore
+		);
+
+		if (hitSomething)
+		{
+			lastGroundHit = hit;
+			if (!isGrounded) // just landed
+			{
+				// Reset air jumps when newly grounded
+				airJumpsUsed = 0;
+			}
+			isGrounded = true;
+			lastGroundedTime = Time.time;
+		}
+		else
+		{
+			isGrounded = false;
+		}
+	}
+
+	/**
+	 * JUMP LOGIC
+	 */
+
+	private void HandleJumpLogic()
+	{
+		jumpConsumedThisFrame = false;
+
+		bool hasBufferedJump = (Time.time - lastJumpPressedTime) <= jumpBufferTime;
+
+		bool withinCoyote = (Time.time - lastGroundedTime) <= coyoteTime;
+
+		bool canGroundJump = isGrounded || withinCoyote;
+		bool canAirJump = !canGroundJump && airJumpsUsed < maxAirJumps;
+
+		jumpPossibleNow = canGroundJump || canAirJump;
+
+		if (!hasBufferedJump || !jumpPossibleNow)
+			return;
+
+		PerformJump(canGroundJump);
+
+		lastJumpPressedTime = -999f;
+		jumpConsumedThisFrame = true;
+	}
+
+	private void PerformJump(bool groundOrCoyote)
+	{
+		// Calculate vertical velocity needed for desired jump height (classic v = sqrt(2gh))
+		float jumpVelocity = Mathf.Sqrt(2f * Mathf.Abs(Physics.gravity.y) * jumpHeight);
+
+		Vector3 v = rb.linearVelocity;
+		if (v.y < 0f) v.y = 0f;    // remove downward momentum
+		v.y = jumpVelocity;
+		rb.linearVelocity = v;
+
+		if (!groundOrCoyote)
+		{
+			airJumpsUsed++;
+		}
+	}
+
 	public void SetSprinting(bool value) => sprinting = value;
 
 #if UNITY_EDITOR
@@ -159,6 +292,35 @@ public class MovementHandler : MonoBehaviour
 		Gizmos.DrawLine(transform.position, transform.position + desiredVelocity);
 		Gizmos.color = Color.green;
 		Gizmos.DrawLine(transform.position, transform.position + planarVelocity);
+
+		DrawGroundProbeGizmos();
+	}
+
+	private void OnDrawGizmos()
+	{
+		DrawGroundProbeGizmos();
+	}
+
+	private void DrawGroundProbeGizmos()
+	{
+		Gizmos.color = jumpPossibleNow ? Color.green : Color.red;
+
+		Vector3 origin = transform.position + Vector3.up * (groundProbeOriginOffset + groundProbeRadius);
+		Vector3 end = origin + Vector3.down * groundProbeDistance;
+
+		Gizmos.DrawLine(origin, end);
+
+		Gizmos.DrawWireSphere(origin, groundProbeRadius);
+
+		if (lastGroundHit.collider != null)
+		{
+			Vector3 hitPoint = lastGroundHit.point + Vector3.up * groundProbeRadius;
+			Gizmos.DrawWireSphere(hitPoint, groundProbeRadius * 0.9f);
+		}
+		else
+		{
+			Gizmos.DrawWireSphere(end, groundProbeRadius * 0.9f);
+		}
 	}
 #endif
 }
