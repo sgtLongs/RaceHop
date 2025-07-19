@@ -342,6 +342,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1188222288}
   - component: {fileID: 1188222287}
+  - component: {fileID: 1188222289}
   m_Layer: 0
   m_Name: TrafficController
   m_TagString: Untagged
@@ -361,7 +362,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cf993604b1822094897376fc51f0a01c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  NumberOfLanes: 3
+  NumberOfLanes: 6
   LaneSpacing: 3.27
   HighwayLength: 88.4
   lanePrefab: {fileID: 0}
@@ -382,6 +383,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1188222289
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1188222286}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4da7d86a50d0ec54c977111d9dfb4876, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  spawnInterval: 1
+  maxCars: 16
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
