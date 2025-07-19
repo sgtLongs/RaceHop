@@ -74,6 +74,21 @@ public class MovementHandler : MonoBehaviour
 	private bool isCrouching;
 	private float currentTargetHeight;
 
+	// Platform / moving ground
+	private Rigidbody groundBody;
+	private Transform groundTransform;
+	private Vector3 groundVelocity;
+	private Vector3 lastGroundPos;
+	private bool hadGroundLastFrame;
+
+	// For continuous relative mode
+	public enum PlatformInheritMode { None, OnLandingImpulse, Continuous, ContinuousHybrid }
+	public PlatformInheritMode inheritMode = PlatformInheritMode.Continuous;
+	private Transform currentPlatform;
+	private Vector3 platformLastPos;
+	private bool platformJustSet;
+
+
 
 	// Jump / Ground state
 	private bool isGrounded;
@@ -128,16 +143,14 @@ public class MovementHandler : MonoBehaviour
 	void FixedUpdate()
 	{
 		ProbeGround();
-
+		ApplyPlatformDelta();
 		HandleJumpLogic();
-
 		ApplyPlanarVelocity();
 
 		if (!isGrounded && extraGravity > 0f)
-		{
 			rb.AddForce(Vector3.down * extraGravity, ForceMode.Acceleration);
-		}
 	}
+
 
 	void LateUpdate()
 	{
@@ -188,24 +201,31 @@ public class MovementHandler : MonoBehaviour
 
 	private void ApplyPlanarVelocity()
 	{
+		// 1. Apply platform transform delta (if any).
+		ApplyPlatformDelta();
+
 		float dt = Time.fixedDeltaTime;
 
+		// 2. Smooth player-controlled planar velocity (world space).
 		ResetVelocityIfTurningThresholdIsReached();
 
-		float tau = CalculateTau();
+		bool speedingUp = desiredVelocity.sqrMagnitude >
+						  planarVelocity.sqrMagnitude + 0.0001f;
+		float tau = speedingUp ? accelTau : decelTau;
 
-		if (tau <= 0f)
-		{
-			planarVelocity = desiredVelocity;
-		}
-		else
-		{
-			float alpha = 1f - Mathf.Exp(-dt / Mathf.Max(0.0001f, tau));
-			planarVelocity += (desiredVelocity - planarVelocity) * alpha;
-		}
+		float alpha = (tau <= 0f) ? 1f :
+					  1f - Mathf.Exp(-dt / Mathf.Max(0.0001f, tau));
 
-		rb.linearVelocity = new Vector3(planarVelocity.x, rb.linearVelocity.y, planarVelocity.z);
+		planarVelocity += (desiredVelocity - planarVelocity) * alpha;
+
+		// 3. Write to rigidbody (preserve vertical component).
+		Vector3 v = rb.linearVelocity;
+		v.x = planarVelocity.x;
+		v.z = planarVelocity.z;
+		rb.linearVelocity = v;
 	}
+
+
 
 	private void SetDesiredVelocity()
 	{
@@ -266,18 +286,19 @@ public class MovementHandler : MonoBehaviour
 
 	private void ResetVelocityIfTurningThresholdIsReached()
 	{
-		if (zeroOnHardReverse &&
-					desiredVelocity != Vector3.zero &&
-					planarVelocity != Vector3.zero)
+		if (!zeroOnHardReverse) return;
+
+		if (desiredVelocity != Vector3.zero && planarVelocity != Vector3.zero)
 		{
 			float dot = Vector3.Dot(planarVelocity.normalized, desiredVelocity.normalized);
-
 			if (dot < directionFlipThreshold)
 			{
 				planarVelocity = Vector3.zero;
 			}
 		}
 	}
+
+
 
 	private float CalculateTau()
 	{
@@ -293,6 +314,8 @@ public class MovementHandler : MonoBehaviour
 
 	private void ProbeGround()
 	{
+		hadGroundLastFrame = isGrounded;
+
 		Vector3 origin = transform.position + Vector3.up * (groundProbeOriginOffset + groundProbeRadius);
 		float castDistance = groundProbeDistance;
 
@@ -309,19 +332,81 @@ public class MovementHandler : MonoBehaviour
 		if (hitSomething)
 		{
 			lastGroundHit = hit;
-			if (!isGrounded) // just landed
-			{
-				// Reset air jumps when newly grounded
-				airJumpsUsed = 0;
-			}
 			isGrounded = true;
 			lastGroundedTime = Time.time;
+
+			Transform plat = hit.collider.transform;
+			if (plat != currentPlatform)
+			{
+				currentPlatform = plat;
+				platformLastPos = currentPlatform.position; // initialize so first delta = 0
+				platformJustSet = true;
+			}
+
+			if (!hadGroundLastFrame)
+				airJumpsUsed = 0;
 		}
 		else
 		{
 			isGrounded = false;
+			currentPlatform = null;
 		}
 	}
+
+
+	private Vector3 GetPlatformVelocity(RaycastHit hit)
+	{
+		// If dynamic rigidbody with angular movement
+		if (groundBody && !groundBody.isKinematic)
+		{
+			return groundBody.GetPointVelocity(hit.point);
+		}
+
+		// If kinematic body or no rigidbody, estimate from transform delta
+		if (groundTransform)
+		{
+			Vector3 currentPos = groundTransform.position;
+			Vector3 vel = Vector3.zero;
+			if (hadGroundLastFrame && inheritMode != PlatformInheritMode.None)
+				vel = (currentPos - lastGroundPos) / Time.fixedDeltaTime;
+			lastGroundPos = currentPos;
+			return vel;
+		}
+
+		return Vector3.zero;
+	}
+
+	private void ApplyPlatformDelta()
+	{
+		if (!isGrounded || currentPlatform == null) return;
+
+		Vector3 currentPos = currentPlatform.position;
+
+		// If we just landed / changed platform, we don't want a huge delta spike.
+		if (platformJustSet)
+		{
+			platformLastPos = currentPos;
+			platformJustSet = false;
+			return;
+		}
+
+		Vector3 delta = currentPos - platformLastPos;
+
+		if (delta.sqrMagnitude > 0f)
+		{
+			// Only horizontal (your platform only moves on X; keep general)
+			// Remove this line if later you want vertical lifts:
+			delta.y = 0f;
+
+			// Move the rigidbody with the platform.
+			rb.MovePosition(rb.position + delta);
+		}
+
+		platformLastPos = currentPos;
+	}
+
+
+
 
 	/**
 	 * JUMP LOGIC
