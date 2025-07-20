@@ -28,7 +28,7 @@ public class CarLaneChangeController : MonoBehaviour
 
 	public void HandleLaneChange(Car.CarScanResult scan)
 	{
-		if (isChanging || car.currentLane == null || car.LaneHandler == null)
+		if (isChanging || car.currentLane == null || car.TrafficHandler == null)
 			return;
 
 		// 1. Standard “stuck behind car” change (forward only)
@@ -43,7 +43,7 @@ public class CarLaneChangeController : MonoBehaviour
 			Car rear = scan.carBehind;
 
 			// If rear can already switch itself, we do nothing.
-			if (car.LaneHandler.FindSwitchableLane(rear) == null)
+			if (car.TrafficHandler.FindSwitchableLane(rear) == null)
 			{
 				if (TrySwitchLane())
 					lastCourtesyTime = Time.time;
@@ -53,7 +53,7 @@ public class CarLaneChangeController : MonoBehaviour
 
 	private bool TrySwitchLane()
 	{
-		Lane newLane = car.LaneHandler.SwitchCarLane(car);
+		Lane newLane = car.TrafficHandler.SwitchCarLane(car);
 		if (newLane != null)
 		{
 			StartCoroutine(LerpToLane(newLane));
@@ -184,8 +184,8 @@ public class CarLaneChangeController : MonoBehaviour
 		Color zoneColor;
 		bool rearCanSelfSwitch = false;
 		if (hasRear)
-			rearCanSelfSwitch = car.LaneHandler != null &&
-								car.LaneHandler.FindSwitchableLane(scan.carBehind) != null;
+			rearCanSelfSwitch = car.TrafficHandler != null &&
+								car.TrafficHandler.FindSwitchableLane(scan.carBehind) != null;
 
 		if (!hasRear)
 			zoneColor = new Color(0f, 1f, 1f, 0.15f);          // no rear car

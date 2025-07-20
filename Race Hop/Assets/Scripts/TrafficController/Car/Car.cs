@@ -32,7 +32,7 @@ public class Car : MonoBehaviour
 
 	#region Public (exposed to controllers)
 
-	public LaneHandler LaneHandler { get; private set; }
+	public TrafficHandler TrafficHandler { get; private set; }
 
 	// Speed is *owned* by CarSpeedController, but we expose it:
 	public float CurrentSpeed => speedController != null ? speedController.CurrentSpeed : 0f;
@@ -77,11 +77,11 @@ public class Car : MonoBehaviour
 
 	void Awake()
 	{
-		LaneHandler = FindFirstObjectByType<LaneHandler>();
+		TrafficHandler = FindFirstObjectByType<TrafficHandler>();
 		speedController = GetComponent<CarSpeedController>();
 		laneChangeController = GetComponent<CarLaneChangeController>();
 
-		if (LaneHandler == null)
+		if (TrafficHandler == null)
 		{
 			Debug.LogError("[Car] LaneHandler not found.");
 			enabled = false;
