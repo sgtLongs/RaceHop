@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class LaneHandler : MonoBehaviour
+public class  TrafficHandler : MonoBehaviour
 {
 	#region Fields & Properties
 

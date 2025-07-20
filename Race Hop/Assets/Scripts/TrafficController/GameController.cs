@@ -8,14 +8,14 @@ public class GameController : MonoBehaviour
 	public int maxCars = 25;             // <= 0 means "no cap"
 
 	private float spawnTimer;
-	private LaneHandler laneHandler;
+	private TrafficHandler trafficHandler;
 
 	private readonly List<Car> activeCars = new List<Car>();
 
 	void Awake()
 	{
-		laneHandler = GetComponent<LaneHandler>();
-		if (laneHandler == null)
+		trafficHandler = GetComponent<TrafficHandler>();
+		if (trafficHandler == null)
 			Debug.LogError("LaneHandler missing on GameController.");
 	}
 
@@ -44,7 +44,7 @@ public class GameController : MonoBehaviour
 
 	private void TrySpawnCar()
 	{
-		laneHandler.SpawnCar();
+		trafficHandler.SpawnCar();
 	}
 
 	// Fallback periodic cleanup (optional)
