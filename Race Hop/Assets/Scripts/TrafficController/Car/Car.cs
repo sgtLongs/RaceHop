@@ -170,18 +170,34 @@ public class Car : MonoBehaviour
 		transform.position += dir * speed * Time.deltaTime;
 	}
 
+	/// <summary>
+	/// Removes the car once it has travelled outside the lane’s Z interval.
+	/// Works for lanes facing either +Z or –Z.
+	/// </summary>
 	private void CheckForEndOfLane()
 	{
 		if (currentLane == null) return;
-		Vector3 targetPoint = moveForward ? currentLane.endPosition.position
-										  : currentLane.startPosition.position;
 
-		if (Vector3.Distance(transform.position, targetPoint) < deleteThreshold)
+		float startZ = currentLane.startPosition.position.z;
+		float endZ = currentLane.endPosition.position.z;
+		float carZ = transform.position.z;
+
+		// Normalise so startZ is always the smaller value
+		if (startZ > endZ)
+		{
+			float tmp = startZ;
+			startZ = endZ;
+			endZ = tmp;
+		}
+
+		// Destroy once we’re outside [startZ, endZ]
+		if (carZ < startZ || carZ > endZ)
 		{
 			currentLane.UnsubscribeCar(this);
 			Destroy(gameObject);
 		}
 	}
+
 
 	public void CompleteLaneChange(Lane newLane)
 	{
