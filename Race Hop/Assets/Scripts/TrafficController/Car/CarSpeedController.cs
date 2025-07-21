@@ -41,7 +41,7 @@ public class CarSpeedController : MonoBehaviour
 	private void UpdateSpeedForward(Car.CarScanResult scan)
 	{
 		float target = maxForwardSpeed;
-
+		
 		if (scan.HasCarAhead)
 			target = ComputeForwardTargetSpeed(scan);
 
