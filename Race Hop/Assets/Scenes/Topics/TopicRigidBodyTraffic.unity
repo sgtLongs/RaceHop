@@ -632,7 +632,7 @@ Transform:
   m_GameObject: {fileID: 1686069534}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 63.5, y: 4.18, z: 43.22}
+  m_LocalPosition: {x: 63.5, y: 4.18, z: 49.39}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1168,6 +1168,17 @@ MonoBehaviour:
   GroundProbeRadius: 0.4
   GroundProbeDistance: 0.64
   GroundProbeOriginOffset: -0.98
+  EnableCrouch: 1
+  StandingHeight: 2
+  CrouchHeight: 1.2
+  CrouchTransitionSpeed: 10
+  StandingEyeHeight: 0.8
+  CrouchedEyeHeight: -0.1
+  CeilingMask:
+    serializedVersion: 2
+    m_Bits: 8
+  HeadClearanceBuffer: 0.05
+  CameraPivot: {fileID: 8926501184982422018}
 --- !u!4 &8926501184982422018
 Transform:
   m_ObjectHideFlags: 0
