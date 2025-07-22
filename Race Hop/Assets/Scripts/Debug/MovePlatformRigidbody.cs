@@ -4,16 +4,15 @@ using UnityEngine;
 public class MovePlatformRigidbody : MonoBehaviour
 {
 	[Header("Movement Settings")]
-	public Vector3 moveDirection = Vector3.forward;  // Default movement along Z
-	public float speed = 5f;                         // Units per second
+	public Vector3 moveDirection = Vector3.forward;
+	public float speed = 5f;
 
 	private Rigidbody rb;
 
 	void Awake()
 	{
 		rb = GetComponent<Rigidbody>();
-		rb.interpolation = RigidbodyInterpolation.Interpolate; // Smooth movement
-		rb.constraints = RigidbodyConstraints.FreezeRotation; // Optional: prevent spinning
+		rb.constraints = RigidbodyConstraints.FreezeRotation;
 	}
 
 	void FixedUpdate()
