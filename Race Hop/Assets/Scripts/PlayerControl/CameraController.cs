@@ -37,6 +37,8 @@ public class CameraController : MonoBehaviour
 	// For smoothing
 	private Vector2 smoothedLook;
 
+	
+
 	void Awake()
 	{
 		if (!controlObserver)

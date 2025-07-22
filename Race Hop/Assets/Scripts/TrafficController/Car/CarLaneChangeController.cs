@@ -1,176 +1,106 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Car))]
+[RequireComponent(typeof(Rigidbody))]
 public class CarLaneChangeController : MonoBehaviour
 {
-	[Header("Lane Change")]
-	public float laneChangeSpeed = 5f; // Interp rate: units of "normalized progress per second"
-
-	[Header("Courtesy Yield")]
+	public float laneChangeSpeed = 5f;      // normalised 0‑1 per second
 	public float courtesyCooldown = 2f;
-	private float lastCourtesyTime = -999f;
-
-	[Header("Gizmo")]
 	public bool showCourtesyZone = true;
+
+	public float lastCourtesyTime;
 
 	private Car car;
 	private CarSpeedController speed;
-	private bool isChanging = false;
+	private Rigidbody rb;
+	private bool isChanging;
 
 	void Awake()
 	{
 		car = GetComponent<Car>();
 		speed = GetComponent<CarSpeedController>();
+		rb = GetComponent<Rigidbody>();
 	}
 
 	public void HandleLaneChange(Car.CarScanResult scan)
 	{
-		if (isChanging || car.currentLane == null || car.TrafficHandler == null)
-			return;
+		if (isChanging || car.currentLane == null || car.TrafficHandler == null) return;
 
-		// 1. Standard �stuck behind car� change (forward only)
+		// 1. stuck‑behind‑car
 		if (car.moveForward && scan.HasCarAhead && scan.distanceAhead < car.checkAheadDistance)
 			TrySwitchLane();
 
-		// 2. Courtesy yield (rear car blocked & we are off cooldown)
+		// 2. courtesy yield
 		if (scan.HasCarBehind &&
 			scan.distanceBehind <= car.rearCheckDistance &&
 			Time.time - lastCourtesyTime >= courtesyCooldown)
 		{
-			Car rear = scan.carBehind;
-
-			// If rear can already switch itself, we do nothing.
-			if (car.TrafficHandler.FindSwitchableLane(rear) == null)
-			{
-				if (TrySwitchLane())
-					lastCourtesyTime = Time.time;
-			}
+			if (car.TrafficHandler.FindSwitchableLane(scan.carBehind) == null && TrySwitchLane())
+				lastCourtesyTime = Time.time;
 		}
 	}
 
-	private bool TrySwitchLane()
+	bool TrySwitchLane()
 	{
-		Lane newLane = car.TrafficHandler.SwitchCarLane(car);
-		if (newLane != null)
-		{
-			StartCoroutine(LerpToLane(newLane));
-			return true;
-		}
-		return false;
+		Lane target = car.TrafficHandler.SwitchCarLane(car);
+		if (target == null) return false;
+		StartCoroutine(LateralLerp(target));
+		return true;
 	}
 
+	/* quintic smootherstep */
+	private static float Ease(float t) => t * t * t * (10f + t * (-15f + 6f * t));
 
-	private static float SmoothStepQuintic(float t)
-	{
-		// t^3 (10 + t(-15 + 6t))  == 6t^5 -15t^4 +10t^3
-		return t * t * t * (10f + t * (-15f + 6f * t));
-	}
-
-
-	private IEnumerator LerpToLane(Lane targetLane)
+	IEnumerator LateralLerp(Lane targetLane)
 	{
 		isChanging = true;
 
+		// Un‑/re‑register for scans immediately.
 		Lane oldLane = car.currentLane;
-
-		// Gather lane geometry
-		Vector3 oldStart = oldLane.startPosition.position;
-		Vector3 oldEnd = oldLane.endPosition.position;
-		Vector3 oldDir = (oldEnd - oldStart).normalized;
-
-		// Progress along old lane (scalar)
-		float oldLaneLen = Mathf.Max(Vector3.Distance(oldStart, oldEnd), 0.001f);
-		float distAlongOld = Vector3.Dot(transform.position - oldStart, oldDir);
-		float progress = Mathf.Clamp01(distAlongOld / oldLaneLen);
-
-		// Target lane geometry
-		Vector3 newStart = targetLane.startPosition.position;
-		Vector3 newEnd = targetLane.endPosition.position;
-		Vector3 newDir = (newEnd - newStart).normalized;
-
-		// Base center position on target lane at same progress *right now*
-		Vector3 baseCenterStart = Vector3.Lerp(newStart, newEnd, progress);
-
-		// Lateral vector from that center to our current position (start lateral offset).
-		Vector3 startOffset = transform.position - baseCenterStart;
-
-		// (Usually this is mostly perpendicular to lane direction; we won�t enforce strict orthogonality,
-		// but you *could* project out any forward component if you want pure lateral:
-		// startOffset -= Vector3.Project(startOffset, newDir); )
-
-		// We want to end with zero offset (centered in new lane).
-		Vector3 endOffset = Vector3.zero;
-
-		// Bookkeeping: move car to new lane *immediately* so scans / speeds adapt.
 		oldLane.UnsubscribeCar(car);
 		targetLane.SubscribeCar(car);
-		car.currentLane = targetLane;   // <-- immediate logical switch
+		car.currentLane = targetLane;
 
-		// OPTIONAL: If you want instant speed reaction THIS frame (not next),
-		// you could expose a public method on Car to rescan right now.
-		// e.g., car.ForceImmediateRescan(); (You'd need to implement it.)
-
-		// Rotation handling
-		Quaternion startRot = transform.rotation;
+		/* geometry */
+		Vector3 newDir = (targetLane.endPosition.position - targetLane.startPosition.position).normalized;
 		Quaternion targetRot = Quaternion.LookRotation(newDir, Vector3.up);
+		rb.rotation = targetRot;                    // snap yaw
 
-		// Choose rotation strategy
-		bool immediateYaw = true; // set false to ease rotation
+		/* determine initial lateral offset */
+		float progress = Vector3.Dot(rb.position - targetLane.startPosition.position, newDir) /
+						 Mathf.Max(Vector3.Distance(targetLane.startPosition.position, targetLane.endPosition.position), 0.001f);
+		Vector3 laneCenter = Vector3.Lerp(targetLane.startPosition.position, targetLane.endPosition.position, progress);
+		Vector3 startOffset = rb.position - laneCenter;
 
-		if (immediateYaw)
-			transform.rotation = targetRot;  // snap so forward movement is aligned
-
-		float t = 0f;
-		float durationNormSpeed = Mathf.Max(laneChangeSpeed, 0.0001f); // laneChangeSpeed = "normalized progress per second"
+		float t = 0f; float speedNorm = Mathf.Max(laneChangeSpeed, 0.0001f);
 
 		while (t < 1f)
 		{
-			t += Time.deltaTime * durationNormSpeed;
-			float tClamped = Mathf.Clamp01(t);
+			t += Time.deltaTime * speedNorm;
+			float q = Ease(Mathf.Clamp01(t));
 
-			float q = SmoothStepQuintic(tClamped); // eased lateral progress
+			// Re‑sample current longitudinal progress to stay in sync with forward motion
+			float dist = Vector3.Dot(rb.position - targetLane.startPosition.position, newDir);
+			laneCenter = targetLane.startPosition.position + newDir * dist;
 
-			// After Car.Update has already advanced us forward, we recompute a fresh base center
-			// at the *current* projected distance on the new lane.
-			// (Projection uses our current position each frame.)
-			Vector3 posNow = transform.position;
-			float distAlongNew = Vector3.Dot(posNow - newStart, newDir);
+			Vector3 offset = Vector3.LerpUnclamped(startOffset, Vector3.zero, q);
 
-			// Alternatively, to keep progress monotonic even if drift occurs,
-			// we can advance distAlongNew from previous frame � but projection is fine here.
-			Vector3 baseCenter = newStart + newDir * distAlongNew;
+			// **Teleport** position laterally (still no MovePosition)
+			rb.position = laneCenter + offset;
 
-			// Lerp lateral offset toward 0
-			Vector3 offset = Vector3.LerpUnclamped(startOffset, endOffset, q);
-
-			// Rebuild final position: base lane center + eased lateral offset
-			Vector3 finalPos = baseCenter + offset;
-
-			transform.position = finalPos;
-
-			if (!immediateYaw)
-				transform.rotation = Quaternion.Slerp(startRot, targetRot, q);
-			
-			yield return null;
+			yield return null;                      // wait next frame (uses Update‑rate smoothing)
 		}
 
-		// Final snap (safety)
-		// Recompute base center at final projected distance
-		{
-			Vector3 posNow = transform.position;
-			float distAlongNew = Vector3.Dot(posNow - newStart, newDir);
-			Vector3 baseCenter = newStart + newDir * distAlongNew;
-			transform.position = baseCenter;  // fully centered
-			transform.rotation = targetRot;
-		}
-
-		car.CompleteLaneChange(targetLane);
+		// final center snap
+		float finalDist = Vector3.Dot(rb.position - targetLane.startPosition.position, newDir);
+		rb.position = targetLane.startPosition.position + newDir * finalDist;
 		isChanging = false;
 	}
-
 
 	#region Gizmos
 	public void DrawLaneChangeGizmos()
@@ -188,13 +118,13 @@ public class CarLaneChangeController : MonoBehaviour
 								car.TrafficHandler.FindSwitchableLane(scan.carBehind) != null;
 
 		if (!hasRear)
-			zoneColor = new Color(0f, 1f, 1f, 0.15f);          // no rear car
+			zoneColor = new Color(0f, 1f, 1f, 0.15f);
 		else if (rearCanSelfSwitch)
-			zoneColor = new Color(0f, 0.9f, 0.2f, 0.25f);       // rear will handle itself
+			zoneColor = new Color(0f, 0.9f, 0.2f, 0.25f);
 		else
 			zoneColor = cooldownReady
-				? new Color(1f, 0.55f, 0f, 0.35f)               // we plan to yield
-				: new Color(0.5f, 0.5f, 0.5f, 0.30f);            // blocked but cooling
+				? new Color(1f, 0.55f, 0f, 0.35f)
+				: new Color(0.5f, 0.5f, 0.5f, 0.30f);
 
 		DrawCourtesyZone(car.rearCheckDistance, 2.5f, -transform.forward, zoneColor);
 

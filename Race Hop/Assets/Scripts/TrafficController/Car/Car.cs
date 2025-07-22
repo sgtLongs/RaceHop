@@ -5,6 +5,7 @@ using UnityEditor;
 #endif
 
 [DisallowMultipleComponent]
+[RequireComponent(typeof(Rigidbody))]
 public class Car : MonoBehaviour
 {
 	#region Inspector (Shared Core)
@@ -17,8 +18,8 @@ public class Car : MonoBehaviour
 	public float deleteThreshold = 2f;
 
 	[Header("Detection Distances")]
-	public float checkAheadDistance = 15f;   // (Used by speed + lane change)
-	public float rearCheckDistance = 8f;    // (Used by courtesy yield)
+	public float checkAheadDistance = 15f;
+	public float rearCheckDistance = 8f;
 
 	[Header("Gizmos")]
 	public bool gizmoShowForwardZones = true;
@@ -30,35 +31,21 @@ public class Car : MonoBehaviour
 
 	#endregion
 
-	#region Public (exposed to controllers)
-
 	public TrafficHandler TrafficHandler { get; private set; }
-
-	// Speed is *owned* by CarSpeedController, but we expose it:
 	public float CurrentSpeed => speedController != null ? speedController.CurrentSpeed : 0f;
-
-	// Latest per-lane scan (produced once per frame for all consumers):
 	public CarScanResult LatestScan { get; private set; } = CarScanResult.Empty;
-
-	#endregion
-
-	#region Private
 
 	private CarSpeedController speedController;
 	private CarLaneChangeController laneChangeController;
+	private Rigidbody rb;
 
-	#endregion
-
-	#region Struct (shared)
-
+	#region Struct
 	public struct CarScanResult
 	{
 		public Car carAhead;
 		public float distanceAhead;
-
 		public Car carBehind;
 		public float distanceBehind;
-
 		public bool HasCarAhead => carAhead != null;
 		public bool HasCarBehind => carBehind != null;
 
@@ -70,59 +57,42 @@ public class Car : MonoBehaviour
 			distanceBehind = float.MaxValue
 		};
 	}
-
 	#endregion
-
-	#region Unity
 
 	void Awake()
 	{
 		TrafficHandler = FindFirstObjectByType<TrafficHandler>();
 		speedController = GetComponent<CarSpeedController>();
 		laneChangeController = GetComponent<CarLaneChangeController>();
+		rb = GetComponent<Rigidbody>();
 
-		if (TrafficHandler == null)
-		{
-			Debug.LogError("[Car] LaneHandler not found.");
-			enabled = false;
-			return;
-		}
-		
+		if (TrafficHandler == null) { Debug.LogError("TrafficHandler not found"); enabled = false; }
+		rb.constraints = RigidbodyConstraints.FreezeRotationX |
+						   RigidbodyConstraints.FreezeRotationZ;
 	}
 
+	// Per‑frame “AI” / perception.
 	void Update()
 	{
-		// 1. Gather passive perception once.
-		LatestScan = ScanEnvironment();
+		LatestScan = ScanEnvironment();           // 1. perception
+		speedController?.HandleSpeed(LatestScan); // 2. speed logic (sets CurrentSpeed)
+		laneChangeController?.HandleLaneChange(LatestScan); // 3. lane changes
+	}
 
-		// 2. Speed logic
-		speedController?.HandleSpeed(LatestScan);
-
-		// 3. Translate
-		ApplyMovement(speedController?.CurrentSpeed ?? 0f);
-
-		// 4. Lane change decisions (after we know speed)
-		laneChangeController?.HandleLaneChange(LatestScan);
-
-		// 5. Lifecycle / cleanup
+	void FixedUpdate()
+	{
 		CheckForEndOfLane();
 	}
 
 	void OnDrawGizmos()
 	{
 		if (currentLane == null) return;
-		DrawCoreGizmos();          // Forward/back zones & link lines
-		laneChangeController?.DrawLaneChangeGizmos(); // Courtesy + target sphere
-		speedController?.DrawSpeedLabel();            // Optional speed text
+		DrawCoreGizmos();
+		laneChangeController?.DrawLaneChangeGizmos();
+		speedController?.DrawSpeedLabel();
 	}
 
-	#endregion
-
-	#region Scanning (shared)
-
-	/**
-	 * Populates a car scan with the nearest car behind and in front
-	 */
+	#region Scanning
 	private CarScanResult ScanEnvironment()
 	{
 		if (currentLane == null) return CarScanResult.Empty;
@@ -133,13 +103,15 @@ public class Car : MonoBehaviour
 		Vector3 laneEnd = currentLane.endPosition.position;
 		Vector3 dir = (laneEnd - laneStart).normalized;
 
-		float myDist = Vector3.Dot(transform.position - laneStart, dir);
+		float myDist = Vector3.Dot(rb.position - laneStart, dir);
 
 		foreach (var other in currentLane.cars)
 		{
 			if (other == null || other == this) continue;
 
-			float otherCarsDistanceFromStart = Vector3.Dot(other.transform.position - laneStart, dir);
+			Rigidbody rigidbody = other.GetComponent<Rigidbody>();
+
+			float otherCarsDistanceFromStart = Vector3.Dot(rigidbody.position - laneStart, dir);
 			float gap = otherCarsDistanceFromStart - myDist;
 
 			if (gap > 0f && gap < scanResult.distanceAhead && gap < checkAheadDistance)
@@ -159,24 +131,16 @@ public class Car : MonoBehaviour
 		}
 		return scanResult;
 	}
-
 	#endregion
 
 	#region Movement & Lifecycle
 
-	private void ApplyMovement(float speed)
-	{
-		Vector3 dir = moveForward ? transform.forward : -transform.forward;
-		transform.position += dir * speed * Time.deltaTime;
-	}
-
 	private void CheckForEndOfLane()
 	{
 		if (currentLane == null) return;
-		Vector3 targetPoint = moveForward ? currentLane.endPosition.position
-										  : currentLane.startPosition.position;
-
-		if (Vector3.Distance(transform.position, targetPoint) < deleteThreshold)
+		Vector3 target = moveForward ? currentLane.endPosition.position
+									 : currentLane.startPosition.position;
+		if (Vector3.Distance(rb.position, target) < deleteThreshold)
 		{
 			currentLane.UnsubscribeCar(this);
 			Destroy(gameObject);
@@ -190,12 +154,12 @@ public class Car : MonoBehaviour
 
 	void OnDestroy()
 	{
-		currentLane.UnsubscribeCar(this);
+		if (currentLane != null)
+			currentLane.UnsubscribeCar(this);
 	}
 	#endregion
 
-	#region Gizmos (core only)
-
+	#region Gizmos
 	private void DrawCoreGizmos()
 	{
 		var scan = LatestScan;
@@ -236,6 +200,5 @@ public class Car : MonoBehaviour
 		Vector3 size = new Vector3(width, height, distance);
 		Gizmos.DrawWireCube(center, size);
 	}
-
 	#endregion
 }

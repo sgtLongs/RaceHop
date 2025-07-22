@@ -1,41 +1,55 @@
+﻿using UnityEngine;
+#if UNITY_EDITOR
 using UnityEditor;
-using UnityEngine;
+#endif
 
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Car))]
+[RequireComponent(typeof(Rigidbody))]
 public class CarSpeedController : MonoBehaviour
 {
-	[Header("Forward Motion")]
+	#region Inspector
 	public float maxForwardSpeed = 10f;
-	public float forwardAcceleration = 5f;   // base accel
-	public float brakingMultiplier = 8f;     // how much stronger braking adjust is
-
-	[Header("Backward Motion / Reaction")]
+	public float forwardAcceleration = 5f;
+	public float brakingMultiplier = 8f;
 	public float backwardSpeed = 5f;
-	public float backwardBoostMultiplier = 1.5f;        // keep original behavior comment
+	public float backwardBoostMultiplier = 1.5f;
 	public float backwardBoostLerpSpeed = 4f;
 	public float backwardRecoverLerpSpeed = 2f;
-
-	[Header("Debug")]
 	public bool gizmoShowSpeedLabel = false;
+	#endregion
 
 	public float CurrentSpeed { get; private set; }
 
 	private Car car;
+	private Rigidbody rb;
 
 	void Awake()
 	{
 		car = GetComponent<Car>();
-		if (!car.moveForward)
-			CurrentSpeed = backwardSpeed;
+		rb = GetComponent<Rigidbody>();
+
+		if (!car.moveForward) CurrentSpeed = backwardSpeed;
 	}
 
+	/* ─── LOGIC (called from Car.Update) ─── */
 	public void HandleSpeed(Car.CarScanResult scan)
 	{
-		if (car.moveForward)
-			UpdateSpeedForward(scan);
-		else
-			UpdateSpeedBackward(scan);
+		if (car.moveForward) UpdateSpeedForward(scan);
+		else UpdateSpeedBackward(scan);
+	}
+
+	/* ─── PHYSICS APPLICATION ─── */
+	void FixedUpdate()
+	{
+		// Forward/backward component along car’s facing.
+		Vector3 dir = car.moveForward ? transform.forward : -transform.forward;
+
+		// Keep any lateral / vertical velocities that other systems (lane change,
+		// ramps, etc.) may have applied.
+		Vector3 lateral = rb.linearVelocity - Vector3.Project(rb.linearVelocity, dir);
+
+		rb.linearVelocity = dir * CurrentSpeed + lateral;
 	}
 
 	private void UpdateSpeedForward(Car.CarScanResult scan)
@@ -46,19 +60,14 @@ public class CarSpeedController : MonoBehaviour
 			target = ComputeForwardTargetSpeed(scan);
 
 		bool braking = target < CurrentSpeed;
-		float accelMag = braking ? forwardAcceleration * brakingMultiplier
-								 : forwardAcceleration;
-
+		float accelMag = braking ? forwardAcceleration * brakingMultiplier : forwardAcceleration;
 		CurrentSpeed = Mathf.MoveTowards(CurrentSpeed, target, accelMag * Time.deltaTime);
 
 		if (scan.HasCarAhead)
 			EnforceForwardGap(scan);
 	}
 
-	public float GetCurrentSpeed()
-	{
-		return car.moveForward ? CurrentSpeed : CurrentSpeed * -1;
-	}
+	public float GetCurrentSpeed() => car.moveForward ? CurrentSpeed : CurrentSpeed * -1f;
 
 	private float ComputeForwardTargetSpeed(Car.CarScanResult scan)
 	{
@@ -72,9 +81,7 @@ public class CarSpeedController : MonoBehaviour
 
 		if (dist < decelZone)
 		{
-			float blend = (dist <= minZone)
-				? 1f
-				: (decelZone - dist) / (decelZone - minZone);
+			float blend = (dist <= minZone) ? 1f : (decelZone - dist) / (decelZone - minZone);
 			blend = Mathf.Clamp01(blend);
 			target = Mathf.Lerp(maxForwardSpeed, desiredMinSpeed, blend);
 		}
@@ -124,7 +131,6 @@ public class CarSpeedController : MonoBehaviour
 	public void DrawSpeedLabel()
 	{
 		if (!gizmoShowSpeedLabel) return;
-
 		GUIStyle style = new GUIStyle(EditorStyles.boldLabel);
 		style.normal.textColor = Color.white;
 		var scan = car.LatestScan;
@@ -135,6 +141,6 @@ public class CarSpeedController : MonoBehaviour
 		Handles.Label(transform.position + Vector3.up * 2f, label, style);
 	}
 #else
-    public void DrawSpeedLabel() { }
+	public void DrawSpeedLabel() { }
 #endif
 }
