@@ -147,6 +147,7 @@ public class Car : MonoBehaviour
 		}
 	}
 
+
 	public void CompleteLaneChange(Lane newLane)
 	{
 		currentLane = newLane;

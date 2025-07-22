@@ -20,7 +20,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: mFog 9
+  m_Name: mFog 10
   m_Shader: {fileID: -6465566751694194690, guid: bdc4c2598006a674091a919d39a751a6, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -148,10 +148,10 @@ Material:
     - _ZWrite: 0
     - _alphaMult: 1.74
     - _cutoffHeight: 0
-    - _finalMultPass: 10.33
-    - _heightFade: 2.05
-    - _maxAlpha: 0.9
-    - _noiseScale: 2
+    - _finalMultPass: 23.7
+    - _heightFade: 2.81
+    - _maxAlpha: 1
+    - _noiseScale: 3
     - _scrollSped: 0
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
@@ -162,6 +162,6 @@ Material:
     - _SoftParticleFadeParams: {r: 0, g: 0.0952381, b: 0, a: 0}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
     - _Tint: {r: 0.19904622, g: 0, b: 0.2264151, a: 1}
-    - _fogScroll: {r: 0.1, g: -0.01, b: 0, a: 0}
+    - _fogScroll: {r: 0.3, g: -0.01, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

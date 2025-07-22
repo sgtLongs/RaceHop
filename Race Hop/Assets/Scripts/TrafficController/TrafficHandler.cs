@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 public class  TrafficHandler : MonoBehaviour
@@ -65,6 +65,39 @@ public class  TrafficHandler : MonoBehaviour
 	#endregion
 
 	#region Lane Management
+
+	/// <summary>
+	/// Adjusts every lane so that the start‑marker takes one Z value
+	/// and the end‑marker takes another, leaving X & Y unchanged.
+	/// </summary>
+	/// <param name="startZ">World‑space Z to apply to every lane’s startPosition.</param>
+	/// <param name="endZ">World‑space Z to apply to every lane’s endPosition.</param>
+	public void SetAllLaneZ(float startZ, float endZ)
+	{
+		if (lanes == null || lanes.Count == 0) return;
+
+		foreach (Lane lane in lanes)
+		{
+			if (lane == null) continue;
+
+			// ------ Start point ------
+			if (lane.startPosition != null)
+			{
+				Vector3 p = lane.startPosition.position;
+				p.z = startZ;
+				lane.startPosition.position = p;
+			}
+
+			// ------- End point -------
+			if (lane.endPosition != null)
+			{
+				Vector3 p = lane.endPosition.position;
+				p.z = endZ;
+				lane.endPosition.position = p;
+			}
+		}
+	}
+
 
 	private void CreateLanes()
 	{
