@@ -67,7 +67,6 @@ public class Car : MonoBehaviour
 		rb = GetComponent<Rigidbody>();
 
 		if (TrafficHandler == null) { Debug.LogError("TrafficHandler not found"); enabled = false; }
-		rb.interpolation = RigidbodyInterpolation.Interpolate;
 		rb.constraints = RigidbodyConstraints.FreezeRotationX |
 						   RigidbodyConstraints.FreezeRotationZ;
 	}
