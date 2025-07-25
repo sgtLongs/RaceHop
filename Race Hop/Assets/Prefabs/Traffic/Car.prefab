@@ -223,10 +223,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 97d8fc6cd1af376488f5d03e92d88694, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  laneChangeSpeed: 1
+  laneChangeSpeed: 2.95
+  maxLateralAccel: 25
   courtesyCooldown: 2
   showCourtesyZone: 1
   lastCourtesyTime: 0
+  alignYawWithLane: 1
+  yawAlignSpeed: 4
 --- !u!114 &1965148104985298119
 MonoBehaviour:
   m_ObjectHideFlags: 0
