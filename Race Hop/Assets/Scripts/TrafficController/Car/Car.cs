@@ -1,5 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections;
+
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -39,6 +41,15 @@ public class Car : MonoBehaviour
 	private CarLaneChangeController laneChangeController;
 	private Rigidbody rb;
 
+	public float BaseSpeed = 5;
+	public bool isStatic = false;
+
+	private float yPosition;
+	private Quaternion rotation;
+
+	public Rigidbody Rigidbody { get { return rb; } private set { } }
+
+
 	#region Struct
 	public struct CarScanResult
 	{
@@ -66,6 +77,9 @@ public class Car : MonoBehaviour
 		laneChangeController = GetComponent<CarLaneChangeController>();
 		rb = GetComponent<Rigidbody>();
 
+		/*yPosition = rb.position.y;
+		rotation = rb.rotation;*/
+
 		if (TrafficHandler == null) { Debug.LogError("TrafficHandler not found"); enabled = false; }
 		rb.constraints = RigidbodyConstraints.FreezeRotationX |
 						   RigidbodyConstraints.FreezeRotationZ;
@@ -74,14 +88,25 @@ public class Car : MonoBehaviour
 	// Per‑frame “AI” / perception.
 	void Update()
 	{
-		LatestScan = ScanEnvironment();           // 1. perception
-		speedController?.HandleSpeed(LatestScan); // 2. speed logic (sets CurrentSpeed)
-		laneChangeController?.HandleLaneChange(LatestScan); // 3. lane changes
+		if(!isStatic)
+		{
+			LatestScan = ScanEnvironment();           // 1. perception
+			speedController?.HandleSpeed(LatestScan); // 2. speed logic (sets CurrentSpeed)
+			laneChangeController?.HandleLaneChange(LatestScan); // 3. lane changes
+		}
+		
 	}
 
 	void FixedUpdate()
 	{
 		CheckForEndOfLane();
+
+		/*Vector3 position = new Vector3(rb.position.x, yPosition, rb.position.z);
+
+		rb.position = position;
+		rb.rotation = rotation;*/
+		rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+		rb.angularVelocity = Vector3.zero;
 	}
 
 	void OnDrawGizmos()
@@ -138,9 +163,15 @@ public class Car : MonoBehaviour
 	private void CheckForEndOfLane()
 	{
 		if (currentLane == null) return;
-		Vector3 target = moveForward ? currentLane.endPosition.position
+		/*Vector3 target = moveForward ? currentLane.endPosition.position
 									 : currentLane.startPosition.position;
 		if (Vector3.Distance(rb.position, target) < deleteThreshold)
+		{
+			currentLane.UnsubscribeCar(this);
+			Destroy(gameObject);
+		}*/
+
+		if(rb.position.z < currentLane.startPosition.position.z || rb.position.z > currentLane.endPosition.position.z)
 		{
 			currentLane.UnsubscribeCar(this);
 			Destroy(gameObject);

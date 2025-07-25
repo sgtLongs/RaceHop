@@ -16,20 +16,24 @@ public class CarLaneChangeController : MonoBehaviour
 	public float lastCourtesyTime;
 
 	private Car car;
-	private CarSpeedController speed;
+	private CarSpeedController speedController;
 	private Rigidbody rb;
 	private bool isChanging;
+
+	private float BaseSpeed;
 
 	void Awake()
 	{
 		car = GetComponent<Car>();
-		speed = GetComponent<CarSpeedController>();
+		speedController = GetComponent<CarSpeedController>();
 		rb = GetComponent<Rigidbody>();
 	}
 
 	public void HandleLaneChange(Car.CarScanResult scan)
 	{
 		if (isChanging || car.currentLane == null || car.TrafficHandler == null) return;
+
+		BaseSpeed = car.BaseSpeed;
 
 		// 1. stuck‑behind‑car
 		if (car.moveForward && scan.HasCarAhead && scan.distanceAhead < car.checkAheadDistance)
@@ -84,16 +88,14 @@ public class CarLaneChangeController : MonoBehaviour
 			t += Time.deltaTime * speedNorm;
 			float q = Ease(Mathf.Clamp01(t));
 
-			// Re‑sample current longitudinal progress to stay in sync with forward motion
 			float dist = Vector3.Dot(rb.position - targetLane.startPosition.position, newDir);
 			laneCenter = targetLane.startPosition.position + newDir * dist;
 
 			Vector3 offset = Vector3.LerpUnclamped(startOffset, Vector3.zero, q);
 
-			// **Teleport** position laterally (still no MovePosition)
 			rb.position = laneCenter + offset;
 
-			yield return null;                      // wait next frame (uses Update‑rate smoothing)
+			yield return null;
 		}
 
 		// final center snap

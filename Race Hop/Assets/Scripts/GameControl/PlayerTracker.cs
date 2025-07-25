@@ -9,7 +9,6 @@ public class PlayerTracker : MonoBehaviour
 {
 	[Header("References")]
 	[SerializeField] private Transform player;              // Player Transform to watch
-	[SerializeField] private TrafficHandler trafficHandler; // Highway / lane owner
 
 	[Header("Settings")]
 	[Tooltip("World-space ΔZ that triggers a lane shift.")]
@@ -19,20 +18,27 @@ public class PlayerTracker : MonoBehaviour
 			 "Set to 0 for instant following.")]
 	[SerializeField] private float followSpeed = 0f;
 
+	public Transform backFog;
+	public GameObject dangerField;
+	public Vector3 dangerFieldSpeed;
+	public float dangerFieldSpeedFalloff;
+	public float maxDistanceTraveled = 0;
+
 	// Next world‑space Z at which to shift lanes
 	private float nextShiftZ;
 
 	void Start()
 	{
 		if (player == null)
+		{
 			player = GameObject.FindGameObjectWithTag("Player")?.transform;
 
-		if (trafficHandler == null || player == null)
-		{
-			Debug.LogError("PlayerTracker: missing references.");
-			enabled = false;
-			return;
+			if (player == null)
+			{
+				return;
+			}
 		}
+
 
 		// First trigger point = first whole chunk ahead of the player
 		nextShiftZ = Mathf.Floor(player.position.z / shiftThreshold + 1) * shiftThreshold;
@@ -40,6 +46,20 @@ public class PlayerTracker : MonoBehaviour
 
 	void Update()
 	{
+		if (player == null)
+		{
+			player = GameObject.FindGameObjectWithTag("Player")?.transform;
+
+			if (player == null)
+			{
+				return;
+			}
+
+			nextShiftZ = Mathf.Floor(player.position.z / shiftThreshold + 1) * shiftThreshold;
+		}
+
+		UpdateDangerFieldPosition();
+
 		float playerZ = player.position.z;
 
 		//---------------------------
@@ -53,6 +73,7 @@ public class PlayerTracker : MonoBehaviour
 			{
 				// Instant follow
 				pos.z = playerZ;
+				maxDistanceTraveled++;
 			}
 			else
 			{
@@ -62,26 +83,20 @@ public class PlayerTracker : MonoBehaviour
 			transform.position = pos;
 		}
 
-		//-----------------------------------
-		// 2) Chunk‑based lane advancement
-		//-----------------------------------
-		while (playerZ >= nextShiftZ)
+	}
+
+	private void UpdateDangerFieldPosition()
+	{
+		Vector3 position = dangerField.transform.position;
+		float distanceFromBackFog = position.z - backFog.position.z;
+
+		dangerField.transform.position += dangerFieldSpeed;
+
+
+		if (distanceFromBackFog < 0)
 		{
-			ShiftLanes(shiftThreshold);
-			nextShiftZ += shiftThreshold;
+			dangerField.transform.position = new Vector3(position.x, position.y, backFog.position.z);
 		}
 	}
 
-	/// <summary>Moves every lane forward by deltaZ using TrafficHandler.</summary>
-	private void ShiftLanes(float deltaZ)
-	{
-		// Any lane will give us current Z extents; index 0 is fine
-		Lane refLane = trafficHandler.GetLaneByIndex(0);
-		if (refLane == null) return;
-
-		float newStartZ = refLane.startPosition.position.z + deltaZ;
-		float newEndZ = refLane.endPosition.position.z + deltaZ;
-
-		trafficHandler.SetAllLaneZ(newStartZ, newEndZ);
-	}
 }

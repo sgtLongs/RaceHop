@@ -1,86 +1,5 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &1248312404468527530
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 7895088922242372044}
-  - component: {fileID: 9122152650383350233}
-  - component: {fileID: 3563344198562201421}
-  - component: {fileID: 6948500250047068499}
-  m_Layer: 3
-  m_Name: KillBox
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &7895088922242372044
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1248312404468527530}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.52, z: 7.35}
-  m_LocalScale: {x: 10.795416, y: 1.6194, z: 8.6606}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 6919764117328120108}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!33 &9122152650383350233
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1248312404468527530}
-  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!65 &3563344198562201421
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1248312404468527530}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 1
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1, y: 1.5, z: 0.89}
-  m_Center: {x: 0, y: 1, z: 0}
---- !u!114 &6948500250047068499
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1248312404468527530}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7395f8a695c01ba44924de900fcb1e2d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  boxCenter: {x: 0, y: 1, z: 0}
-  boxSize: {x: 1, y: 1.5, z: 0.89}
-  playerTag: Player
-  destroyRootObject: 1
-  showGizmosWhenSelectedOnly: 1
-  gizmoFillAlpha: 0.08
 --- !u!1 &8151563143112849927
 GameObject:
   m_ObjectHideFlags: 0
@@ -97,7 +16,7 @@ GameObject:
   - component: {fileID: 1965148104985298119}
   - component: {fileID: 6153202395095737907}
   m_Layer: 3
-  m_Name: Car
+  m_Name: StartCart
   m_TagString: Car
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -117,7 +36,6 @@ Transform:
   m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 685991597526344794}
-  - {fileID: 7895088922242372044}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!23 &6313234738633941373
@@ -201,8 +119,8 @@ MonoBehaviour:
   moveForward: 1
   currentLane: {fileID: 0}
   deleteThreshold: 1
-  checkAheadDistance: 20
-  rearCheckDistance: 20
+  checkAheadDistance: 15
+  rearCheckDistance: 8
   gizmoShowForwardZones: 1
   gizmoShowBackwardZones: 1
   gizmoShowAheadBehindLinks: 1
