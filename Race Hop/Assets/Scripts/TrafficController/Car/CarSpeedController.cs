@@ -9,10 +9,9 @@ using UnityEditor;
 public class CarSpeedController : MonoBehaviour
 {
 	#region Inspector
-	public float maxForwardSpeed = 10f;
+	public float MaxSpeed = 10f;
 	public float forwardAcceleration = 5f;
 	public float brakingMultiplier = 8f;
-	public float backwardSpeed = 5f;
 	public float backwardBoostMultiplier = 1.5f;
 	public float backwardBoostLerpSpeed = 4f;
 	public float backwardRecoverLerpSpeed = 2f;
@@ -24,12 +23,16 @@ public class CarSpeedController : MonoBehaviour
 	private Car car;
 	private Rigidbody rb;
 
+	private float BaseSpeed;
+
 	void Awake()
 	{
 		car = GetComponent<Car>();
 		rb = GetComponent<Rigidbody>();
 
-		if (!car.moveForward) CurrentSpeed = backwardSpeed;
+		
+
+		if (!car.moveForward) CurrentSpeed = MaxSpeed;
 	}
 
 	/* ─── LOGIC (called from Car.Update) ─── */
@@ -42,11 +45,10 @@ public class CarSpeedController : MonoBehaviour
 	/* ─── PHYSICS APPLICATION ─── */
 	void FixedUpdate()
 	{
-		// Forward/backward component along car’s facing.
+		MaxSpeed = car.BaseSpeed;
+
 		Vector3 dir = car.moveForward ? transform.forward : -transform.forward;
 
-		// Keep any lateral / vertical velocities that other systems (lane change,
-		// ramps, etc.) may have applied.
 		Vector3 lateral = rb.linearVelocity - Vector3.Project(rb.linearVelocity, dir);
 
 		rb.linearVelocity = dir * CurrentSpeed + lateral;
@@ -54,7 +56,7 @@ public class CarSpeedController : MonoBehaviour
 
 	private void UpdateSpeedForward(Car.CarScanResult scan)
 	{
-		float target = maxForwardSpeed;
+		float target = MaxSpeed;
 
 		if (scan.HasCarAhead)
 			target = ComputeForwardTargetSpeed(scan);
@@ -77,13 +79,13 @@ public class CarSpeedController : MonoBehaviour
 		float dist = scan.distanceAhead;
 		float aheadSpd = scan.carAhead.GetComponent<CarSpeedController>()?.GetCurrentSpeed() ?? 0f;
 		float desiredMinSpeed = aheadSpd - 1f;
-		float target = maxForwardSpeed;
+		float target = MaxSpeed;
 
 		if (dist < decelZone)
 		{
 			float blend = (dist <= minZone) ? 1f : (decelZone - dist) / (decelZone - minZone);
 			blend = Mathf.Clamp01(blend);
-			target = Mathf.Lerp(maxForwardSpeed, desiredMinSpeed, blend);
+			target = Mathf.Lerp(MaxSpeed, desiredMinSpeed, blend);
 		}
 
 		if (dist < minZone * 0.5f)
@@ -108,24 +110,85 @@ public class CarSpeedController : MonoBehaviour
 
 	private void UpdateSpeedBackward(Car.CarScanResult scan)
 	{
-		float baseSpeed = backwardSpeed;
+		float baseSpeed = MaxSpeed;                 // cruise speed when reversing
 		float target = baseSpeed;
 
 		if (scan.HasCarBehind)
 		{
-			float boosted = baseSpeed - (baseSpeed * (backwardBoostMultiplier - 1));
-			float proximityT = 1f - Mathf.Clamp01(scan.distanceBehind / car.checkAheadDistance);
-			target = Mathf.Lerp(baseSpeed, boosted, proximityT);
+			/* ---------- PARAMETERS ---------- */
+			const float minGap = 8f;                              // metres – stop here
+			float decelZone = car.checkAheadDistance * 2f;     // start easing twice as far
+			float boostCap = baseSpeed * 1.5f;                // max allowed speed up
 
+			/* ---------- DATA FROM CAR BEHIND ---------- */
+			float behindSpeed = Mathf.Abs(
+				scan.carBehind.GetComponent<CarSpeedController>()?.GetCurrentSpeed() ?? 0f
+			);
+
+			/* ---------- PROXIMITY BLEND (0 → far, 1 → at minGap) ---------- */
+			float t = Mathf.Clamp01(
+				(decelZone - scan.distanceBehind) /
+				(decelZone - minGap)
+			);
+
+			/* ---------- DESIRED SPEED BASED ON BEHIND CAR ----------
+			   Far away → our base speed
+			   Close    → match the behind car's speed (could be zero)             */
+			float blendedTarget = Mathf.Lerp(baseSpeed, behindSpeed, t);
+
+			// Never exceed 1.5× our base cruise speed.
+			blendedTarget = Mathf.Min(blendedTarget, boostCap);
+
+			/* ---------- GAP‑SAFETY CAP ----------
+			   Limit so we cannot move farther than the remaining gap this frame. */
+			float allowedBackward = Mathf.Max(scan.distanceBehind - minGap, 0f);
+			float gapTarget = allowedBackward / Mathf.Max(Time.deltaTime, 0.0001f);
+
+			/* ---------- FINAL TARGET ---------- */
+			target = Mathf.Min(blendedTarget, gapTarget);
+
+			/* ---------- SMOOTH APPROACH ---------- */
 			CurrentSpeed = Mathf.Lerp(CurrentSpeed, target,
-				backwardBoostLerpSpeed * Time.deltaTime);
+									  backwardBoostLerpSpeed * Time.deltaTime);
 		}
 		else
 		{
+			/* ---------- NOTHING BEHIND ---------- */
 			CurrentSpeed = Mathf.Lerp(CurrentSpeed, target,
-				backwardRecoverLerpSpeed * Time.deltaTime);
+									  backwardRecoverLerpSpeed * Time.deltaTime);
 		}
 	}
+
+
+
+
+
+	// NEW – symmetric gap check for static obstacles behind us.
+	private void EnforceBackwardGap(Car.CarScanResult scan)
+	{
+		const float minGap = 10f;
+
+		// How far we are still allowed to move back this frame.
+		float allowedBackward = scan.distanceBehind - minGap;
+		if (allowedBackward < 0f) allowedBackward = 0f;
+
+		float intendedMove = CurrentSpeed * Time.deltaTime;          // positive magnitude
+
+		if (intendedMove > allowedBackward)
+		{
+			float clamped = allowedBackward / Mathf.Max(Time.deltaTime, 0.0001f);
+
+			float behindSpd = scan.carBehind
+							  .GetComponent<CarSpeedController>()?.GetCurrentSpeed()
+							  ?? 0f;                                 // static = 0
+
+			behindSpd = Mathf.Abs(behindSpd);                        // magnitude only
+
+			// Keep at or below both the gap‑safe speed *and* the car‑behind speed‑2.
+			CurrentSpeed = Mathf.Min(clamped, Mathf.Max(behindSpd - 2f, 0f));
+		}
+	}
+
 
 #if UNITY_EDITOR
 	public void DrawSpeedLabel()

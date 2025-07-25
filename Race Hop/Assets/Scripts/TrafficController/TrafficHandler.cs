@@ -1,5 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using Unity.Mathematics;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public class  TrafficHandler : MonoBehaviour
 {
@@ -9,10 +12,21 @@ public class  TrafficHandler : MonoBehaviour
 	public int NumberOfLanes = 3;
 	public float LaneSpacing = 3f;
 	public float HighwayLength = 100f; // Distance forward for the end of the highway
+	public float HighwayLaneSpeed = 10f;
 
 	[Header("Prefabs")]
 	public GameObject lanePrefab;
 	public GameObject carPrefab;
+	public GameObject startCarPrefab;
+
+	public float startCartSpawnOffset = 0.5f;
+	public float laneYOffset = 1f;
+
+	[Tooltip("How far down the lane (in metres) we look for other cars " +
+		 "before allowing a new spawn.")]
+	public float SpawnCheckDepth = 12f;
+
+	public GameController gameController;
 
 	private List<Lane> lanes = new List<Lane>();
 	public bool spawnACar;
@@ -44,6 +58,8 @@ public class  TrafficHandler : MonoBehaviour
 	void Start()
 	{
 		CreateLanes();
+		SpawnStartCar();
+		gameController.PopulateHighway();
 	}
 
 	void Update()
@@ -103,6 +119,8 @@ public class  TrafficHandler : MonoBehaviour
 	{
 		lanes.Clear();
 
+		InstantiateHighway();
+
 		for (int i = 0; i < NumberOfLanes; i++)
 		{
 			float offset = (i - (NumberOfLanes - 1) / 2f) * LaneSpacing;
@@ -111,9 +129,20 @@ public class  TrafficHandler : MonoBehaviour
 		}
 	}
 
+	private void InstantiateHighway()
+	{
+		GameObject highwayObj = Instantiate(lanePrefab, transform);
+		highwayObj.transform.position = new Vector3(highwayObj.transform.position.x, highwayObj.transform.position.y + laneYOffset, highwayObj.transform.position.z + HighwayLength/2);
+		Renderer renderer = highwayObj.GetComponent<Renderer>();
+
+		renderer.material.SetFloat("_NumberOfLanes", NumberOfLanes);
+		renderer.material.SetVector("_TextureSpeed", new Vector4(0, HighwayLaneSpeed * -1, 0,0));
+		highwayObj.transform.localScale = new Vector3(NumberOfLanes/2, highwayObj.transform.localScale.y, highwayObj.transform.localScale.z);
+	}
+
 	private Lane InstantiateLane(int index, float offset)
 	{
-		GameObject laneObj = lanePrefab != null ? Instantiate(lanePrefab, transform) : new GameObject($"Lane_{index}");
+		GameObject laneObj = new GameObject($"Lane_{index}");
 		laneObj.transform.parent = transform;
 
 		Lane lane = laneObj.GetComponent<Lane>() ?? laneObj.AddComponent<Lane>();
@@ -127,10 +156,13 @@ public class  TrafficHandler : MonoBehaviour
 		lane.startPosition = new GameObject($"Start_{index}").transform;
 		lane.endPosition = new GameObject($"End_{index}").transform;
 
+		laneObj.transform.position = transform.position + transform.right * offset + transform.up * laneYOffset + transform.forward * (HighwayLength/2);
+
 		lane.startPosition.parent = laneObj.transform;
 		lane.endPosition.parent = laneObj.transform;
 
 		lane.startPosition.position = transform.position + transform.right * offset;
+		//lane.startPosition.position = transform.position + transform.right * offset;
 		lane.endPosition.position = lane.startPosition.position + transform.forward * HighwayLength;
 	}
 
@@ -147,6 +179,36 @@ public class  TrafficHandler : MonoBehaviour
 
 	#region Car Management
 
+	public void SpawnStartCar()
+	{
+		if (lanes.Count == 0 || startCarPrefab == null)
+		{
+			Debug.LogWarning("No lanes or car prefab assigned.");
+			return;
+		}
+
+		
+
+		Lane chosenLane = lanes[Mathf.FloorToInt(lanes.Count / 2)];
+
+		Vector3 spawnPoint = Vector3.Lerp(chosenLane.startPosition.position, chosenLane.endPosition.position, startCartSpawnOffset);
+
+		GameObject carObj = Instantiate(startCarPrefab, spawnPoint, Quaternion.identity);
+		carObj.transform.rotation = Quaternion.LookRotation(chosenLane.endPosition.position - chosenLane.startPosition.position, Vector3.up);
+
+		Car carComponent = carObj.GetComponent<Car>();
+		if (carComponent != null)
+		{
+			carComponent.moveForward = true;
+			carComponent.BaseSpeed = 0;
+			carComponent.currentLane = chosenLane;
+			carComponent.isStatic = true;
+			carComponent.currentLane.SubscribeCar(carComponent);
+		}
+
+		gameController.SetStartCar(carComponent);
+	}
+
 	public void SpawnCar()
 	{
 		if (lanes.Count == 0 || carPrefab == null)
@@ -155,7 +217,9 @@ public class  TrafficHandler : MonoBehaviour
 			return;
 		}
 
-		Transform spawnPoint = ChooseStartPosition(out Lane chosenLane, out bool spawnAtStart, out _);
+		Transform? spawnPoint = ChooseStartPosition(out Lane chosenLane, out bool spawnAtStart, out _);
+
+		if (spawnPoint == null) return;
 
 		GameObject carObj = Instantiate(carPrefab, spawnPoint.position, Quaternion.identity);
 		carObj.transform.rotation = Quaternion.LookRotation(chosenLane.endPosition.position - chosenLane.startPosition.position, Vector3.up);
@@ -164,19 +228,102 @@ public class  TrafficHandler : MonoBehaviour
 		if (carComponent != null)
 		{
 			carComponent.moveForward = spawnAtStart;
+			carComponent.BaseSpeed = 8f;
 			carComponent.currentLane = chosenLane;
 			carComponent.currentLane.SubscribeCar(carComponent);
 		}
 	}
 
-	private Transform ChooseStartPosition(out Lane chosenLane, out bool spawnAtStart, out Transform spawnPoint)
+	private Transform? ChooseStartPosition(out Lane chosenLane,
+									  out bool spawnAtStart,
+									  out Transform spawnPoint)
 	{
-		chosenLane = lanes[Random.Range(0, lanes.Count)];
+		laneDebugRects.Clear();
+		const int MAX_ATTEMPTS = 10;
 
-		spawnAtStart = Random.value > 0.5f;
-		spawnPoint = spawnAtStart ? chosenLane.startPosition : chosenLane.endPosition;
+		for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++)
+		{
+			// 1. random lane + end‑point
+			chosenLane = lanes[Random.Range(0, lanes.Count)];
+			spawnAtStart = Random.value > 0.5f;
+			spawnPoint = spawnAtStart ? chosenLane.startPosition
+										: chosenLane.endPosition;
+
+			// 2. free space?
+			if (!SpawnAreaOccupied(chosenLane, spawnPoint.position, spawnAtStart))
+				return spawnPoint;
+		}
+
+		Debug.LogWarning($"TrafficHandler: couldn’t find a free spawn after " +
+						 $"{MAX_ATTEMPTS} attempts – forcing first lane.");
+		chosenLane = lanes[0];
+		spawnAtStart = true;
+		spawnPoint = null;
 		return spawnPoint;
 	}
+
+	/// <summary>
+	/// True if a rectangle (LaneSpacing × SpawnCheckDepth) starting at
+	/// <paramref name="origin"/> in the travel direction contains another
+	/// car in the same lane.  Always records a gizmo rectangle showing the test.
+	/// </summary>
+	private bool SpawnAreaOccupied(Lane lane, Vector3 origin, bool forwardDir)
+	{
+		// Direction the new car would travel.
+		Vector3 dir = (lane.endPosition.position - lane.startPosition.position).normalized;
+		if (!forwardDir) dir = -dir;
+
+		float halfWidth = LaneSpacing * 0.5f;
+		float halfLength = SpawnCheckDepth * 0.5f;
+
+		// -------- Occupancy test (cars already registered in this lane) --------
+		bool occupied = false;
+
+		foreach (Car other in lane.cars)
+		{
+			if (other == null) continue;
+
+			Vector3 delta = other.transform.position - origin;
+			float longDist = Vector3.Dot(delta, dir);                   // forward distance
+			if (longDist < 0f || longDist > SpawnCheckDepth) continue;    // outside front edge?
+
+			Vector3 lateral = delta - dir * longDist;                    // sideways offset
+			if (lateral.magnitude <= halfWidth)
+			{
+				occupied = true;
+				break;
+			}
+		}
+
+		// -------- Secondary physics overlap (catches cars not yet subscribed) --------
+		if (!occupied)
+		{
+			Vector3 centre = origin + dir * halfLength;
+			Vector3 halfExts = new Vector3(halfWidth, 2f, halfLength);  // y = 4 m tall
+			Collider[] hits = Physics.OverlapBox(centre,
+													halfExts,
+													Quaternion.LookRotation(dir),
+													~0,
+													QueryTriggerInteraction.Ignore);
+
+			foreach (Collider hit in hits)
+				if (hit.CompareTag("Car")) { occupied = true; break; }
+		}
+
+		// --------‑‑‑  DEBUG RECTANGLE  ‑‑‑--------
+		laneDebugRects.Add(new LaneCheckDebug
+		{
+			center = origin + dir * halfLength,
+			forwardDir = dir,
+			length = SpawnCheckDepth,
+			width = LaneSpacing,
+			color = occupied ? new Color(1f, 0.3f, 0.3f)            // red = blocked
+								  : new Color(0.3f, 1f, 0.3f)            // green = clear
+		});
+
+		return occupied;
+	}
+
 
 	#endregion
 
@@ -351,6 +498,129 @@ public class  TrafficHandler : MonoBehaviour
 	{
 		GetCarAhead(lane, car, out float distanceAhead);
 		return distanceAhead < checkDistance;
+	}
+
+	/// <summary>
+	/// Spawns a car at a random, free point on a random lane.
+	/// Returns true if a car was spawned.
+	/// </summary>
+	/// <param name="edgeBuffer">Minimum distance from lane ends (metres) to avoid spawning too close to endpoints.</param>
+	/// <param name="maxAttemptsPerLane">Tries per lane before giving up and changing lanes.</param>
+	public bool SpawnCarAtRandomFreePoint(float edgeBuffer = 3f, int maxAttemptsPerLane = 8)
+	{
+		if (lanes == null || lanes.Count == 0 || carPrefab == null)
+		{
+			Debug.LogWarning("SpawnCarAtRandomFreePoint: No lanes or car prefab assigned.");
+			return false;
+		}
+
+		laneDebugRects.Clear(); // for gizmos
+
+		int totalAttempts = lanes.Count * maxAttemptsPerLane;
+		for (int attempt = 0; attempt < totalAttempts; attempt++)
+		{
+			// 1) Pick a random lane
+			Lane lane = lanes[Random.Range(0, lanes.Count)];
+			if (lane == null || lane.startPosition == null || lane.endPosition == null) continue;
+
+			Vector3 start = lane.startPosition.position;
+			Vector3 end = lane.endPosition.position;
+			Vector3 dir = (end - start).normalized;
+			float laneLen = Vector3.Distance(start, end);
+
+			// Ensure we have room for the buffer
+			if (laneLen <= edgeBuffer * 2f) continue;
+
+			// 2) Pick a random position t in [buffer, 1-buffer]
+			float tMin = edgeBuffer / laneLen;
+			float tMax = 1f - tMin;
+			float t = Random.Range(tMin, tMax);
+			Vector3 spawnPos = Vector3.Lerp(start, end, t);
+
+			// 3) Check the area around the point is free (symmetric ahead/behind)
+			float halfLen = SpawnCheckDepth * 0.5f;
+			if (!IsRegionFreeAroundPoint(lane, spawnPos, halfLen))
+				continue;
+
+
+			bool moveForward = (GameObject.FindGameObjectsWithTag("Car").Length % 2 == 0);
+
+			GameObject carObj = Instantiate(carPrefab, spawnPos, quaternion.identity);
+			Car carComponent = carObj.GetComponent<Car>();
+			if (carComponent != null)
+			{
+				carComponent.moveForward = moveForward;
+				carComponent.BaseSpeed = 8f;
+				carComponent.currentLane = lane;
+				lane.SubscribeCar(carComponent);
+			}
+			return true;
+		}
+
+		Debug.LogWarning("SpawnCarAtRandomFreePoint: Could not find a free spot after multiple attempts.");
+		return false;
+	}
+
+	/// <summary>
+	/// Returns true if a rectangle (LaneSpacing × (2 * halfLength)) centered at
+	/// <paramref name="origin"/> along the lane is free of cars. Records a gizmo rect.
+	/// </summary>
+	private bool IsRegionFreeAroundPoint(Lane lane, Vector3 origin, float halfLength)
+	{
+		Vector3 start = lane.startPosition.position;
+		Vector3 end = lane.endPosition.position;
+		Vector3 dir = (end - start).normalized;
+
+		float halfWidth = LaneSpacing * 0.5f;
+		bool occupied = false;
+
+		// --- Check lane's registered cars ---
+		foreach (Car other in lane.cars)
+		{
+			if (other == null) continue;
+
+			Vector3 delta = other.transform.position - origin;
+			float longDist = Vector3.Dot(delta, dir); // signed distance along lane
+			if (Mathf.Abs(longDist) > halfLength) continue;
+
+			Vector3 lateral = delta - dir * longDist;
+			if (lateral.magnitude <= halfWidth)
+			{
+				occupied = true;
+				break;
+			}
+		}
+
+		// --- Physics overlap (catches cars not yet subscribed) ---
+		if (!occupied)
+		{
+			Vector3 centre = origin;
+			Vector3 halfExts = new Vector3(halfWidth, 2f, halfLength); // y=4m tall
+			Collider[] hits = Physics.OverlapBox(
+				centre,
+				halfExts,
+				Quaternion.LookRotation(dir),
+				~0,
+				QueryTriggerInteraction.Ignore
+			);
+
+			foreach (Collider hit in hits)
+			{
+				if (hit != null && hit.CompareTag("Car")) { occupied = true; break; }
+			}
+		}
+
+		// --- Debug rect for gizmos ---
+		laneDebugRects.Add(new LaneCheckDebug
+		{
+			center = origin,
+			forwardDir = dir,
+			length = halfLength * 2f,
+			width = LaneSpacing,
+			color = occupied ? new Color(1f, 0.3f, 0.3f) : new Color(0.3f, 1f, 0.3f)
+		});
+
+		return !occupied;
 	}
 
 	#endregion
