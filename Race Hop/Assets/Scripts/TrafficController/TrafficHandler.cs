@@ -14,6 +14,12 @@ public class  TrafficHandler : MonoBehaviour
 	public float HighwayLength = 100f; // Distance forward for the end of the highway
 	public float HighwayLaneSpeed = 10f;
 
+	[Header("CarSettings")]
+	public float forwardMovingPercent = 0.1f;
+	public float carAverageSpeed = 6f;
+	public float carSpeedVariability = 4f;
+	public float driverVoractiy = 0.1f;
+
 	[Header("Prefabs")]
 	public GameObject lanePrefab;
 	public GameObject carPrefab;
@@ -245,7 +251,7 @@ public class  TrafficHandler : MonoBehaviour
 		{
 			// 1. random lane + end‑point
 			chosenLane = lanes[Random.Range(0, lanes.Count)];
-			spawnAtStart = Random.value > 0.5f;
+			spawnAtStart = ShouldCarMoveForward();
 			spawnPoint = spawnAtStart ? chosenLane.startPosition
 										: chosenLane.endPosition;
 
@@ -543,22 +549,45 @@ public class  TrafficHandler : MonoBehaviour
 				continue;
 
 
-			bool moveForward = (GameObject.FindGameObjectsWithTag("Car").Length % 2 == 0);
+			bool moveForward = ShouldCarMoveForward();
 
-			GameObject carObj = Instantiate(carPrefab, spawnPos, quaternion.identity);
-			Car carComponent = carObj.GetComponent<Car>();
-			if (carComponent != null)
-			{
-				carComponent.moveForward = moveForward;
-				carComponent.BaseSpeed = 8f;
-				carComponent.currentLane = lane;
-				lane.SubscribeCar(carComponent);
-			}
+			SpawnCarObject(moveForward, lane, spawnPos);
+
 			return true;
 		}
 
 		Debug.LogWarning("SpawnCarAtRandomFreePoint: Could not find a free spot after multiple attempts.");
 		return false;
+	}
+
+	private bool ShouldCarMoveForward()
+	{
+		if(Random.value <= forwardMovingPercent) return true;
+		return false;
+	}
+
+	private void SpawnCarObject(bool moveForward, Lane lane, Vector3 spawnPosition)
+	{
+		GameObject carObj = Instantiate(carPrefab, spawnPosition, quaternion.identity);
+		Car carComponent = carObj.GetComponent<Car>();
+		if (carComponent != null)
+		{
+			carComponent.moveForward = moveForward;
+			carComponent.BaseSpeed = GetCarSpeed(moveForward);
+			carComponent.currentLane = lane;
+			lane.SubscribeCar(carComponent);
+		}
+	}
+
+	private float GetCarSpeed(bool moveForward)
+	{
+		float speedDifference = (carSpeedVariability * Random.value * Random.value) * ((Mathf.RoundToInt(Random.value) * 2) - 1);
+
+		float speed = carAverageSpeed + speedDifference;
+
+		if (moveForward) speed /= 2;
+
+		return speed;
 	}
 
 	/// <summary>

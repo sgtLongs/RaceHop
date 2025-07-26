@@ -201,8 +201,8 @@ MonoBehaviour:
   moveForward: 1
   currentLane: {fileID: 0}
   deleteThreshold: 1
-  checkAheadDistance: 20
-  rearCheckDistance: 20
+  checkAheadDistance: 10
+  rearCheckDistance: 10
   gizmoShowForwardZones: 1
   gizmoShowBackwardZones: 1
   gizmoShowAheadBehindLinks: 1
@@ -225,6 +225,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   laneChangeSpeed: 2.95
   maxLateralAccel: 25
+  snapXToLaneOnComplete: 0
+  snapTolerance: 3.48
+  laneKeepingEnabled: 1
+  laneKeepSpeed: 1.2
+  laneKeepMaxAccel: 8
+  laneKeepDeadzone: 0.02
+  laneKeepScaleRadius: 0.5
   courtesyCooldown: 2
   showCourtesyZone: 1
   lastCourtesyTime: 0
@@ -248,6 +255,10 @@ MonoBehaviour:
   backwardBoostMultiplier: 1.5
   backwardBoostLerpSpeed: 4
   backwardRecoverLerpSpeed: 2
+  minForwardGap: 7
+  minBackwardGap: 8
+  reactionTime: 0.2
+  emergencyBrakeMultiplier: 2
   gizmoShowSpeedLabel: 1
 --- !u!54 &6153202395095737907
 Rigidbody:

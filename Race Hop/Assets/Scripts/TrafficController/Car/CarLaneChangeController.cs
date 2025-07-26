@@ -15,6 +15,24 @@ public class CarLaneChangeController : MonoBehaviour
 	[Tooltip("Limits sideways acceleration so you don't flip or slide too hard (m/s^2).")]
 	[Range(1f, 100f)] public float maxLateralAccel = 25f;
 
+	[Header("Post‑Change Snap")]
+	public bool snapXToLaneOnComplete = true;
+	[Tooltip("Only snap when the lateral error is already tiny.")]
+	public float snapTolerance = 0.15f;   // metres
+
+	[Header("Lane Keeping (post‑change)")]
+	public bool laneKeepingEnabled = true;
+	[Tooltip("Lower = gentler lane keeping; higher = snappier. (per second)")]
+	[Range(0.1f, 4f)] public float laneKeepSpeed = 1.2f;
+	[Tooltip("Max lateral accel during lane keeping (m/s^2).")]
+	[Range(1f, 50f)] public float laneKeepMaxAccel = 8f;
+	[Tooltip("Ignore tiny errors to avoid jitter (metres).")]
+	[Range(0f, 0.2f)] public float laneKeepDeadzone = 0.02f;
+	[Tooltip("How far from center until full force kicks in (metres).")]
+	[Range(0.05f, 2f)] public float laneKeepScaleRadius = 0.5f;
+
+
+
 	[Header("Courtesy Yield")]
 	public float courtesyCooldown = 2f;
 	public bool showCourtesyZone = true;
@@ -95,79 +113,84 @@ public class CarLaneChangeController : MonoBehaviour
 
 	void FixedUpdate()
 	{
-		if (!isChanging || targetLane == null) return;
+		// Pick which lane geometry to follow
+		Lane activeLane = isChanging ? targetLane : car.currentLane;
+		if (activeLane == null) return;
 
-		// Recompute the lane line each frame in case endpoints move
-		laneStart = targetLane.startPosition.position;
-		laneEnd = targetLane.endPosition.position;
-		laneDir = (laneEnd - laneStart).normalized;
+		// Recompute lane line each step (in case endpoints move)
+		Vector3 start = activeLane.startPosition.position;
+		Vector3 end = activeLane.endPosition.position;
+		Vector3 dir = (end - start).normalized;
 
-		// --- Compute lateral offset (position error) ---
-		// Distance along lane where the car currently is:
-		float distAlong = Vector3.Dot(rb.position - laneStart, laneDir);
-		// Lane center at same progress:
-		Vector3 laneCenter = laneStart + laneDir * distAlong;
+		// --- Lateral error (position) and velocity ---
+		// Progress along lane:
+		float distAlong = Vector3.Dot(rb.position - start, dir);
+		Vector3 laneCenter = start + dir * distAlong;
 
-		// Lateral error is the vector from lane center to the car, with the along-lane part removed.
-		// (Numerically, this is already perpendicular to laneDir, but we ensure it.)
-		Vector3 posError = rb.position - laneCenter;
-		Vector3 posErrorAlong = Vector3.Project(posError, laneDir);
-		Vector3 posErrorLat = posError - posErrorAlong; // pure lateral error
+		// Lateral (perpendicular to dir) error:
+		Vector3 toCenter = rb.position - laneCenter;
+		Vector3 posErrorLat = toCenter - Vector3.Project(toCenter, dir);
 
-		// --- Lateral velocity (for damping) ---
-		Vector3 velAlong = Vector3.Project(rb.linearVelocity, laneDir);
+		// Split velocity into along + lateral
+		Vector3 velAlong = Vector3.Project(rb.linearVelocity, dir);
 		Vector3 velLat = rb.linearVelocity - velAlong;
 
-		// --- PD Controller (critically damped) ---
-		// Choose gains from laneChangeSpeed 's':
-		// For a 2nd-order crit-damped system: x'' + 2*s*x' + s^2*x = 0
-		float s = Mathf.Max(0.1f, laneChangeSpeed);
+		// Choose controller gains & limits
+		bool usingLaneKeep = (!isChanging && laneKeepingEnabled);
+		float s = usingLaneKeep ? Mathf.Max(0.1f, laneKeepSpeed) : Mathf.Max(0.1f, laneChangeSpeed);
+		float maxAccel = usingLaneKeep ? laneKeepMaxAccel : maxLateralAccel;
+
+		// Critical damping coefficients
 		float kp = s * s;
 		float kd = 2f * s;
 
-		// Desired lateral acceleration:
+		// Distance-based scaling (small force near center, larger when far)
+		float errMag = posErrorLat.magnitude;
+		float dead = usingLaneKeep ? laneKeepDeadzone : 0f;
+		float scale = 0f;
+		if (errMag > dead)
+		{
+			// 0 at deadzone edge -> 1 by laneKeepScaleRadius
+			float t = (errMag - dead) / Mathf.Max(0.001f, laneKeepScaleRadius);
+			scale = Mathf.Clamp01(t);
+		}
+
+		// Desired lateral acceleration from PD
 		Vector3 desiredLatAccel = (-kp * posErrorLat) - (kd * velLat);
+		desiredLatAccel *= usingLaneKeep ? Mathf.Lerp(0.15f, 1f, scale) : 1f; // soften near center when keeping
 
-		// Clamp to avoid unrealistic side force
-		if (desiredLatAccel.sqrMagnitude > maxLateralAccel * maxLateralAccel)
-			desiredLatAccel = desiredLatAccel.normalized * maxLateralAccel;
+		// Clamp to prevent unrealistic lateral shove
+		if (desiredLatAccel.sqrMagnitude > maxAccel * maxAccel)
+			desiredLatAccel = desiredLatAccel.normalized * maxAccel;
 
-		// Apply as acceleration so it’s mass‑independent
+		// Apply as acceleration (mass‑independent)
 		rb.AddForce(desiredLatAccel, ForceMode.Acceleration);
 
-		// --- Optional: align yaw to lane using torque (Y axis only) ---
+		// Optional: keep yaw aligned with lane even after change
 		if (alignYawWithLane)
 		{
-			Vector3 forward = transform.forward;
-			Vector3 flatDir = new Vector3(laneDir.x, 0f, laneDir.z).normalized;
-			Vector3 flatFwd = new Vector3(forward.x, 0f, forward.z).normalized;
-
-			// Signed angle around Y
+			Vector3 flatDir = new Vector3(dir.x, 0f, dir.z).normalized;
+			Vector3 flatFwd = new Vector3(transform.forward.x, 0f, transform.forward.z).normalized;
 			float angle = Vector3.SignedAngle(flatFwd, flatDir, Vector3.up);
-			// PD in angular domain (critically damped around yaw):
 			float sy = Mathf.Max(0.1f, yawAlignSpeed);
-			float kpy = sy * sy;
-			float kdy = 2f * sy;
-
-			// Approx angular velocity around Y (in degrees/sec -> convert to radians if you prefer)
+			float kpy = sy * sy, kdy = 2f * sy;
 			float angVelY = rb.angularVelocity.y * Mathf.Rad2Deg;
 			float desiredAngAccY = (-kpy * angle) - (kdy * angVelY);
-
-			// Convert to radians/sec^2 for torque Acceleration mode
-			float desiredAngAccYRad = desiredAngAccY * Mathf.Deg2Rad;
-			Vector3 torque = new Vector3(0f, desiredAngAccYRad, 0f);
-			rb.AddTorque(torque, ForceMode.Acceleration);
+			rb.AddTorque(new Vector3(0f, desiredAngAccY * Mathf.Deg2Rad, 0f), ForceMode.Acceleration);
 		}
 
-		// --- Completion criterion: near center and not sliding sideways ---
-		const float posEps = 0.05f;  // metres
-		const float velEps = 0.05f;  // m/s
-		if (posErrorLat.magnitude <= posEps && velLat.magnitude <= velEps)
+		// Lane-change completion (lane keeping continues afterward)
+		if (isChanging)
 		{
-			isChanging = false;
-			targetLane = null;
+			const float posEps = 0.05f, velEps = 0.05f;
+			if (posErrorLat.magnitude <= posEps && velLat.magnitude <= velEps)
+			{
+				isChanging = false;
+				targetLane = null;
+			}
 		}
 	}
+
 
 	#region Gizmos
 	public void DrawLaneChangeGizmos()

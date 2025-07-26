@@ -30,7 +30,7 @@ public class CarSpeedController : MonoBehaviour
 		car = GetComponent<Car>();
 		rb = GetComponent<Rigidbody>();
 
-		
+
 
 		if (!car.moveForward) CurrentSpeed = MaxSpeed;
 	}
