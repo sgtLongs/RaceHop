@@ -662,7 +662,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1052930813404696883, guid: baaeea99a24532343a413310bb0e0534, type: 3}
       propertyPath: NumberOfLanes
-      value: 5
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 1052930813404696883, guid: baaeea99a24532343a413310bb0e0534, type: 3}
       propertyPath: gameController
