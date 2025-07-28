@@ -5,21 +5,10 @@ using System.Collections;
 
 public class SceneManagerController : MonoBehaviour
 {
-    [Header("Fade Settings")]
     public CanvasGroup fadeCanvasGroup;
     public float fadeDuration = 1f;
-
-    [Header("Debug")]
-    public bool debugFadeToNextScene;
-
-    private void OnValidate()
-    {
-        if (debugFadeToNextScene)
-        {
-            debugFadeToNextScene = false; // auto uncheck
-            FadeToScene("NextScene"); // replace with your target scene
-        }
-    }
+    public GameObject mainMenuGroup;
+    public GameObject settingsPanel;
 
     public void FadeToScene(string sceneName)
     {
@@ -28,31 +17,46 @@ public class SceneManagerController : MonoBehaviour
 
     private IEnumerator FadeAndSwitchScenes(string sceneName)
     {
-        // Fade to black
         yield return StartCoroutine(Fade(1));
-
-        // Load scene
         SceneManager.LoadScene(sceneName);
-
-        // Optional: Wait a frame for scene load
-        yield return null;
-
-        // Fade from black
-        yield return StartCoroutine(Fade(0));
     }
 
-    private IEnumerator Fade(float finalAlpha)
+    private IEnumerator Fade(float targetAlpha)
     {
         fadeCanvasGroup.blocksRaycasts = true;
+        float startAlpha = fadeCanvasGroup.alpha;
+        float timer = 0f;
 
-        float fadeSpeed = Mathf.Abs(fadeCanvasGroup.alpha - finalAlpha) / fadeDuration;
-
-        while (!Mathf.Approximately(fadeCanvasGroup.alpha, finalAlpha))
+        while (!Mathf.Approximately(fadeCanvasGroup.alpha, targetAlpha))
         {
-            fadeCanvasGroup.alpha = Mathf.MoveTowards(fadeCanvasGroup.alpha, finalAlpha, fadeSpeed * Time.deltaTime);
+            fadeCanvasGroup.alpha = Mathf.Lerp(startAlpha, targetAlpha, timer / fadeDuration);
+            timer += Time.deltaTime;
             yield return null;
         }
 
-        fadeCanvasGroup.blocksRaycasts = finalAlpha == 1;
+        fadeCanvasGroup.alpha = targetAlpha;
+    }
+
+    public void OnStartButtonPressed()
+    {
+        FadeToScene("GameScene"); // Replace with your actual game scene name
+    }
+
+    public void OnExitButtonPressed()
+    {
+        Application.Quit();
+        Debug.Log("Quit called");
+    }
+
+    public void OnSettingsButtonPressed()
+    {
+        mainMenuGroup.SetActive(false);
+        settingsPanel.SetActive(true);
+    }
+
+    public void OnBackButtonPressed()
+    {
+        settingsPanel.SetActive(false);
+        mainMenuGroup.SetActive(true);
     }
 }
