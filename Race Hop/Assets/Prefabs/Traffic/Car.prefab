@@ -201,14 +201,15 @@ MonoBehaviour:
   moveForward: 1
   currentLane: {fileID: 0}
   deleteThreshold: 1
-  checkAheadDistance: 10
-  rearCheckDistance: 10
+  checkAheadDistance: 30
+  rearCheckDistance: 30
   gizmoShowForwardZones: 1
   gizmoShowBackwardZones: 1
   gizmoShowAheadBehindLinks: 1
   gizmoShowCourtesyZone: 1
   gizmoShowLaneChangeTarget: 1
   gizmoShowSpeedLabel: 1
+  rearCountDistance: 25
   BaseSpeed: 5
   isStatic: 0
 --- !u!114 &4222233078733283447
@@ -249,17 +250,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 44eaddd6ef2158f419864b44f53ad431, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MaxSpeed: 10
-  forwardAcceleration: 5
-  brakingMultiplier: 8
-  backwardBoostMultiplier: 1.5
-  backwardBoostLerpSpeed: 4
-  backwardRecoverLerpSpeed: 2
-  minForwardGap: 7
-  minBackwardGap: 8
-  reactionTime: 0.2
-  emergencyBrakeMultiplier: 2
-  gizmoShowSpeedLabel: 1
+  CountBoostPerCar: 1
+  MaxCountBoostMultiplier: 2
+  RearObstructionBoostDistance: 40
+  ObstructMinGap: 8
+  FollowMinGap: 8
+  UseCarAheadDistanceAsDecelZone: 1
+  ManualDecelZone: 20
+  Accel: 6
+  BrakeAccel: 10
+  AccelTau: 0.25
+  DecelTau: 0.2
+  ShowDebugArrows: 0
 --- !u!54 &6153202395095737907
 Rigidbody:
   m_ObjectHideFlags: 0

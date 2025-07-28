@@ -63,27 +63,31 @@ public class CarLaneChangeController : MonoBehaviour
 		speedController = GetComponent<CarSpeedController>();
 		rb = GetComponent<Rigidbody>();
 
-		// Recommended rigidbody settings for stable lateral control:
-		// rb.interpolation = RigidbodyInterpolation.Interpolate;
-		// rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
 	}
 
 	public void HandleLaneChange(Car.CarScanResult scan)
 	{
 		if (isChanging || car.currentLane == null || car.TrafficHandler == null) return;
 
-		// 1) stuck behind a car -> try to switch
-		if (car.moveForward && scan.HasCarAhead && scan.distanceAhead < car.checkAheadDistance)
-			TrySwitchLane();
+		FrontLaneSwitch(scan);
+		CourtesyLaneSwitch(scan);
+	}
 
-		// 2) courtesy yield
+	private void CourtesyLaneSwitch(Car.CarScanResult scan)
+	{
 		if (scan.HasCarBehind &&
-			scan.distanceBehind <= car.rearCheckDistance &&
-			Time.time - lastCourtesyTime >= courtesyCooldown)
+					scan.behindCars[0].Distance <= car.rearCheckDistance &&
+					Time.time - lastCourtesyTime >= courtesyCooldown)
 		{
-			if (car.TrafficHandler.FindSwitchableLane(scan.carBehind) == null && TrySwitchLane())
+			if (car.TrafficHandler.FindSwitchableLane(scan.behindCars[0].Car) == null && TrySwitchLane())
 				lastCourtesyTime = Time.time;
 		}
+	}
+
+	private void FrontLaneSwitch(Car.CarScanResult scan)
+	{
+		if (scan.HasCarAhead && scan.aheadCars[0].Distance < car.checkAheadDistance)
+			TrySwitchLane();
 	}
 
 	bool TrySwitchLane()
@@ -198,14 +202,14 @@ public class CarLaneChangeController : MonoBehaviour
 		if (!showCourtesyZone) return;
 
 		var scan = car.LatestScan;
-		bool hasRear = scan.HasCarBehind && scan.distanceBehind <= car.rearCheckDistance;
+		bool hasRear = scan.HasCarBehind && scan.behindCars[0].Distance <= car.rearCheckDistance;
 		bool cooldownReady = Time.time - lastCourtesyTime >= courtesyCooldown;
 
 		Color zoneColor;
 		bool rearCanSelfSwitch = false;
 		if (hasRear)
 			rearCanSelfSwitch = car.TrafficHandler != null &&
-								car.TrafficHandler.FindSwitchableLane(scan.carBehind) != null;
+								car.TrafficHandler.FindSwitchableLane(scan.behindCars[0].Car) != null;
 
 		if (!hasRear)
 			zoneColor = new Color(0f, 1f, 1f, 0.15f);
@@ -227,7 +231,7 @@ public class CarLaneChangeController : MonoBehaviour
 		if (hasRear && car.gizmoShowAheadBehindLinks)
 		{
 			Gizmos.color = zoneColor;
-			Gizmos.DrawLine(transform.position, scan.carBehind.transform.position);
+			Gizmos.DrawLine(transform.position, scan.behindCars[0].Car.transform.position);
 		}
 	}
 

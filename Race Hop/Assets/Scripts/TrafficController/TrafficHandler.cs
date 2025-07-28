@@ -230,11 +230,13 @@ public class  TrafficHandler : MonoBehaviour
 		GameObject carObj = Instantiate(carPrefab, spawnPoint.position, Quaternion.identity);
 		carObj.transform.rotation = Quaternion.LookRotation(chosenLane.endPosition.position - chosenLane.startPosition.position, Vector3.up);
 
+		int directionModifier = spawnAtStart ? 1 : -1;
+
 		Car carComponent = carObj.GetComponent<Car>();
 		if (carComponent != null)
 		{
 			carComponent.moveForward = spawnAtStart;
-			carComponent.BaseSpeed = 8f;
+			carComponent.BaseSpeed = 8f * directionModifier;
 			carComponent.currentLane = chosenLane;
 			carComponent.currentLane.SubscribeCar(carComponent);
 		}
@@ -550,7 +552,6 @@ public class  TrafficHandler : MonoBehaviour
 
 
 			bool moveForward = ShouldCarMoveForward();
-
 			SpawnCarObject(moveForward, lane, spawnPos);
 
 			return true;
@@ -562,7 +563,7 @@ public class  TrafficHandler : MonoBehaviour
 
 	private bool ShouldCarMoveForward()
 	{
-		if(Random.value <= forwardMovingPercent) return true;
+		if(Random.value <= forwardMovingPercent) return false;
 		return false;
 	}
 
@@ -570,6 +571,7 @@ public class  TrafficHandler : MonoBehaviour
 	{
 		GameObject carObj = Instantiate(carPrefab, spawnPosition, quaternion.identity);
 		Car carComponent = carObj.GetComponent<Car>();
+
 		if (carComponent != null)
 		{
 			carComponent.moveForward = moveForward;
@@ -585,7 +587,15 @@ public class  TrafficHandler : MonoBehaviour
 
 		float speed = carAverageSpeed + speedDifference;
 
-		if (moveForward) speed /= 2;
+		if (moveForward)
+		{
+			speed /= 2;
+			
+		}
+		else
+		{
+			speed *= -1;
+		}
 
 		return speed;
 	}

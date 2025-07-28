@@ -149,14 +149,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4da7d86a50d0ec54c977111d9dfb4876, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  spawnInterval: 2.5
-  maxCars: 60
+  spawnInterval: 0.2
+  maxCars: 110
   trafficHandler: {fileID: 164674693}
   PlayerPrefab: {fileID: 3817675742523921203, guid: 3a3a809e1352ce247b9d4b4b6b024edb, type: 3}
   PlayerSpawnOffset: {x: 0, y: 3, z: 0}
   PlayerSpawnRotation: {x: 0, y: 0, z: 0}
   timeScale: 1
-  spawnPlayer: 0
+  spawnPlayer: 1
   MaxNumberOfInitialPopulationFailures: 15
 --- !u!4 &99538454
 Transform:
@@ -661,9 +661,25 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1052930813404696883, guid: baaeea99a24532343a413310bb0e0534, type: 3}
+      propertyPath: NumberOfLanes
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 1052930813404696883, guid: baaeea99a24532343a413310bb0e0534, type: 3}
       propertyPath: gameController
       value: 
       objectReference: {fileID: 99538453}
+    - target: {fileID: 1052930813404696883, guid: baaeea99a24532343a413310bb0e0534, type: 3}
+      propertyPath: carAverageSpeed
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 1052930813404696883, guid: baaeea99a24532343a413310bb0e0534, type: 3}
+      propertyPath: carSpeedVariability
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 1052930813404696883, guid: baaeea99a24532343a413310bb0e0534, type: 3}
+      propertyPath: forwardMovingPercent
+      value: 0.1
+      objectReference: {fileID: 0}
     - target: {fileID: 3926316634929104529, guid: baaeea99a24532343a413310bb0e0534, type: 3}
       propertyPath: m_Name
       value: TrafficController
