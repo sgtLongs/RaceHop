@@ -217,7 +217,7 @@ MonoBehaviour:
   GroundMask:
     serializedVersion: 2
     m_Bits: 8
-  GroundProbeRadius: 0.4
+  GroundProbeRadius: 0.61
   GroundProbeDistance: 0.4
   GroundProbeOriginOffset: -0.98
   EnableCrouch: 1
