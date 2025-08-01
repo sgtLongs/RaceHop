@@ -1,5 +1,11 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
+using NUnit.Framework;
+
+
+
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -29,6 +35,11 @@ public class Car : MonoBehaviour
 	public bool gizmoShowLaneChangeTarget = true;
 	public bool gizmoShowSpeedLabel = false;
 
+	[Tooltip("How far we count cars behind for BOOST logic. If <= 0, uses rearCheckDistance.")]
+	public float rearCountDistance = 25f;   // tweak to taste
+
+	Transform dangerField;
+
 	#endregion
 
 	public TrafficHandler TrafficHandler { get; private set; }
@@ -39,25 +50,46 @@ public class Car : MonoBehaviour
 	private CarLaneChangeController laneChangeController;
 	private Rigidbody rb;
 
+	public float BaseSpeed = 5;
+	public bool isStatic = false;
+
+	public float voracity = 0.14f;
+
+	private float yPosition;
+	private Quaternion rotation;
+
+	public Rigidbody Rigidbody { get { return rb; } private set { } }
+
+	public struct CarScan
+	{
+		public Car Car { get; private set; }
+		public float Distance { get; private set; }
+
+		public CarScan(Car car, float distance)
+		{
+			Car = car;
+			Distance = distance;
+		}
+	}
+
 	#region Struct
 	public struct CarScanResult
 	{
-		public Car carAhead;
-		public float distanceAhead;
-		public Car carBehind;
-		public float distanceBehind;
-		public bool HasCarAhead => carAhead != null;
-		public bool HasCarBehind => carBehind != null;
+		public List<CarScan> aheadCars;
+
+		public List<CarScan> behindCars;
+
+		public bool HasCarAhead => aheadCars != null && aheadCars.Count > 0;
+		public bool HasCarBehind => behindCars != null && behindCars.Count > 0;
 
 		public static CarScanResult Empty => new CarScanResult
 		{
-			carAhead = null,
-			carBehind = null,
-			distanceAhead = float.MaxValue,
-			distanceBehind = float.MaxValue
+			aheadCars = new List<CarScan>(),
+			behindCars = new List<CarScan>()
 		};
 	}
 	#endregion
+
 
 	void Awake()
 	{
@@ -65,26 +97,45 @@ public class Car : MonoBehaviour
 		speedController = GetComponent<CarSpeedController>();
 		laneChangeController = GetComponent<CarLaneChangeController>();
 		rb = GetComponent<Rigidbody>();
+		dangerField = GameObject.FindGameObjectWithTag("DangerField").transform;
+
 
 		if (TrafficHandler == null) { Debug.LogError("TrafficHandler not found"); enabled = false; }
-		rb.constraints = RigidbodyConstraints.FreezeRotationX |
-						   RigidbodyConstraints.FreezeRotationZ;
+		rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
 	}
 
-	// Per‑frame “AI” / perception.
 	void Update()
 	{
-		LatestScan = ScanEnvironment();           // 1. perception
-		speedController?.HandleSpeed(LatestScan); // 2. speed logic (sets CurrentSpeed)
-		laneChangeController?.HandleLaneChange(LatestScan); // 3. lane changes
+			float randValue = Random.value;
+			if(randValue > 0.66)
+			{
+				BaseSpeed -= voracity;
+			}
+
+			if (randValue < 0.33)
+			{
+				BaseSpeed += voracity;
+			}
+
+			if(gameObject.transform.position.z < dangerField.position.z)
+			{
+				BaseSpeed -= voracity + 0.2f;
+			}
+
+			LatestScan = ScanEnvironment();
+			speedController?.HandleSpeed(LatestScan);
+			laneChangeController?.HandleLaneChange(LatestScan);
 	}
 
 	void FixedUpdate()
 	{
 		CheckForEndOfLane();
+
+		rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+		rb.angularVelocity = Vector3.zero;
 	}
 
-	void OnDrawGizmos()
+	void OnDrawGizmosSelected()
 	{
 		if (currentLane == null) return;
 		DrawCoreGizmos();
@@ -92,55 +143,100 @@ public class Car : MonoBehaviour
 		speedController?.DrawSpeedLabel();
 	}
 
-	#region Scanning
 	private CarScanResult ScanEnvironment()
 	{
 		if (currentLane == null) return CarScanResult.Empty;
 
-		CarScanResult scanResult = CarScanResult.Empty;
+		CarScanResult scan = CarScanResult.Empty;
+
+		List<CarScan> aheadList = new List<CarScan>();
+		List<CarScan> behindList = new List<CarScan>();
 
 		Vector3 laneStart = currentLane.startPosition.position;
 		Vector3 laneEnd = currentLane.endPosition.position;
-		Vector3 dir = (laneEnd - laneStart).normalized;
 
-		float myDist = Vector3.Dot(rb.position - laneStart, dir);
+		Vector3 dir;
+		if (!FindDirection(scan, laneStart, laneEnd, out dir)) return scan;
 
-		foreach (var other in currentLane.cars)
+		PopulateScanLists(aheadList, behindList, dir);
+		SortScanListsByDistance(aheadList, behindList);
+
+		scan.aheadCars = aheadList;
+		scan.behindCars = behindList;
+
+		return scan;
+	}
+
+	private float CalculateDistanceFromStartOfLane(Vector3 dir)
+	{
+		Vector3 laneStartPosition = new Vector3(currentLane.startPosition.position.x, 0f, currentLane.startPosition.position.z);
+		Vector3 carPosition = new Vector3(rb.position.x, 0f, rb.position.z);
+		float myDist = Vector3.Dot(carPosition - laneStartPosition, dir);
+		return myDist;
+	}
+
+	private static void SortScanListsByDistance(List<CarScan> aheadList, List<CarScan> behindList)
+	{
+		aheadList.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+		behindList.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+	}
+
+	private void PopulateScanLists(List<CarScan> aheadList, List<CarScan> behindList, Vector3 carDirection)
+	{
+		Vector3 laneStartPosition = new Vector3(currentLane.startPosition.position.x, 0f, currentLane.startPosition.position.z);
+
+		foreach (Car otherCar in currentLane.cars)
 		{
-			if (other == null || other == this) continue;
+			if (otherCar == null || otherCar == this) continue;
 
-			Rigidbody rigidbody = other.GetComponent<Rigidbody>();
+			float gap = CalculateGapBetweenOtherCar(carDirection, otherCar);
 
-			float otherCarsDistanceFromStart = Vector3.Dot(rigidbody.position - laneStart, dir);
-			float gap = otherCarsDistanceFromStart - myDist;
-
-			if (gap > 0f && gap < scanResult.distanceAhead && gap < checkAheadDistance)
+			if (gap > 0f)
 			{
-				scanResult.distanceAhead = gap;
-				scanResult.carAhead = other;
+				if (gap <= checkAheadDistance) aheadList.Add(new CarScan(otherCar, gap));
 			}
-			if (gap < 0f)
+			else if (gap < 0f)
 			{
 				float behindGap = -gap;
-				if (behindGap < scanResult.distanceBehind && behindGap < rearCheckDistance)
-				{
-					scanResult.distanceBehind = behindGap;
-					scanResult.carBehind = other;
-				}
+
+				if (behindGap <= rearCheckDistance) behindList.Add(new CarScan(otherCar, behindGap));
 			}
 		}
-		return scanResult;
 	}
-	#endregion
+
+	private float CalculateGapBetweenOtherCar(Vector3 carDirection, Car otherCar)
+	{
+		float distanceFromStart = CalculateDistanceFromStartOfLane(carDirection);
+		Vector3 laneStartPosition = new Vector3(currentLane.startPosition.position.x, 0f, currentLane.startPosition.position.z);
+
+		Rigidbody otherRigidbody = otherCar.GetComponent<Rigidbody>();
+		Vector3 otherPosition = new Vector3(otherRigidbody.position.x, 0f, otherRigidbody.position.z);
+
+		float otherDist = Vector3.Dot(otherPosition - laneStartPosition, carDirection);
+
+		float gap = otherDist - distanceFromStart;
+
+		return gap;
+	}
+
+	private static bool FindDirection(CarScanResult scan, Vector3 laneStart, Vector3 laneEnd, out Vector3 dir)
+	{
+		dir = laneEnd - laneStart;
+		dir.y = 0f;
+		if (dir.sqrMagnitude < 1e-6f) return false;
+		dir.Normalize();
+		return true;
+	}
+
+
 
 	#region Movement & Lifecycle
 
 	private void CheckForEndOfLane()
 	{
 		if (currentLane == null) return;
-		Vector3 target = moveForward ? currentLane.endPosition.position
-									 : currentLane.startPosition.position;
-		if (Vector3.Distance(rb.position, target) < deleteThreshold)
+
+		if(rb.position.z < currentLane.startPosition.position.z || rb.position.z > currentLane.endPosition.position.z)
 		{
 			currentLane.UnsubscribeCar(this);
 			Destroy(gameObject);
@@ -183,12 +279,12 @@ public class Car : MonoBehaviour
 			if (scan.HasCarAhead)
 			{
 				Gizmos.color = Color.red;
-				Gizmos.DrawLine(transform.position, scan.carAhead.transform.position);
+				Gizmos.DrawLine(transform.position, scan.aheadCars[0].Car.transform.position);
 			}
 			if (scan.HasCarBehind)
 			{
 				Gizmos.color = Color.green;
-				Gizmos.DrawLine(transform.position, scan.carBehind.transform.position);
+				Gizmos.DrawLine(transform.position, scan.behindCars[0].Car.transform.position);
 			}
 		}
 	}
