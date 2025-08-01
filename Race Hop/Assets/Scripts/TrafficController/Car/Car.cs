@@ -38,6 +38,8 @@ public class Car : MonoBehaviour
 	[Tooltip("How far we count cars behind for BOOST logic. If <= 0, uses rearCheckDistance.")]
 	public float rearCountDistance = 25f;   // tweak to taste
 
+	Transform dangerField;
+
 	#endregion
 
 	public TrafficHandler TrafficHandler { get; private set; }
@@ -50,6 +52,8 @@ public class Car : MonoBehaviour
 
 	public float BaseSpeed = 5;
 	public bool isStatic = false;
+
+	public float voracity = 0.14f;
 
 	private float yPosition;
 	private Quaternion rotation;
@@ -93,6 +97,7 @@ public class Car : MonoBehaviour
 		speedController = GetComponent<CarSpeedController>();
 		laneChangeController = GetComponent<CarLaneChangeController>();
 		rb = GetComponent<Rigidbody>();
+		dangerField = GameObject.FindGameObjectWithTag("DangerField").transform;
 
 
 		if (TrafficHandler == null) { Debug.LogError("TrafficHandler not found"); enabled = false; }
@@ -101,6 +106,21 @@ public class Car : MonoBehaviour
 
 	void Update()
 	{
+			float randValue = Random.value;
+			if(randValue > 0.66)
+			{
+				BaseSpeed -= voracity;
+			}
+
+			if (randValue < 0.33)
+			{
+				BaseSpeed += voracity;
+			}
+
+			if(gameObject.transform.position.z < dangerField.position.z)
+			{
+				BaseSpeed -= voracity + 0.2f;
+			}
 
 			LatestScan = ScanEnvironment();
 			speedController?.HandleSpeed(LatestScan);

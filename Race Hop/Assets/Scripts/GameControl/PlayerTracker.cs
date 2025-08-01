@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using TMPro;
+using UnityEngine;
 
 /// <summary>
 /// Follows the player smoothly along +Z and slides the highway forward
@@ -26,6 +27,8 @@ public class PlayerTracker : MonoBehaviour
 
 	// Next world‑space Z at which to shift lanes
 	private float nextShiftZ;
+
+	public TMP_Text maxDistanceText;
 
 	void Start()
 	{
@@ -57,6 +60,8 @@ public class PlayerTracker : MonoBehaviour
 
 			nextShiftZ = Mathf.Floor(player.position.z / shiftThreshold + 1) * shiftThreshold;
 		}
+
+		maxDistanceText.text = (maxDistanceTraveled/10) + " Meters";
 
 		UpdateDangerFieldPosition();
 
