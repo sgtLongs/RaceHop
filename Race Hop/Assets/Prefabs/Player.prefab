@@ -218,7 +218,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   GroundProbeRadius: 0.4
-  GroundProbeDistance: 0.64
+  GroundProbeDistance: 0.4
   GroundProbeOriginOffset: -0.98
   EnableCrouch: 1
   StandingHeight: 2
@@ -243,6 +243,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2a2d573f46b77964fa7e37311d4bf7ef, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  deathCanvas: {fileID: 0}
 --- !u!1 &8686102265900936907
 GameObject:
   m_ObjectHideFlags: 0
