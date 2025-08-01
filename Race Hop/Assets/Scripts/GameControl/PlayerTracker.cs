@@ -95,7 +95,7 @@ public class PlayerTracker : MonoBehaviour
 		Vector3 position = dangerField.transform.position;
 		float distanceFromBackFog = position.z - backFog.position.z;
 
-		dangerField.transform.position += dangerFieldSpeed;
+		dangerField.transform.position += dangerFieldSpeed * Time.deltaTime;
 
 
 		if (distanceFromBackFog < 0)
