@@ -147,9 +147,9 @@ MonoBehaviour:
   height: 0.43
   planeSize: {x: 10.89, y: 1.03, z: 10.27}
   playerTag: Player
-  forceDirection: {x: 0, y: 0.1, z: -1}
-  forceMagnitude: 3000
-  forceMode: 5
+  forceDirection: {x: 0, y: 0.01, z: -1}
+  forceMagnitude: 4000
+  forceMode: 1
   useLocalSpaceDirection: 1
   showGizmosWhenSelectedOnly: 1
   gizmoFillAlpha: 0.08
