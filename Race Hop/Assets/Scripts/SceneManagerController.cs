@@ -42,6 +42,15 @@ public class SceneManagerController : MonoBehaviour
     {
         StartCoroutine(SwitchMenus(mainMenuGroup, settingsPanel));
     }
+    void Update()
+    {
+        // Check if Escape is pressed and the main menu is active
+        if(Input.GetKeyDown(KeyCode.Escape))
+        {
+            Debug.Log("Escape was pressed");
+            OnSettingsButtonPressed();
+        }
+    }
 
     public void OnBackButtonPressed()
     {
@@ -67,7 +76,7 @@ public class SceneManagerController : MonoBehaviour
     private IEnumerator FadeAndSwitchScenes(string sceneName)
     {
         yield return StartCoroutine(FadeGroup(fadeCanvasGroup, 1));
-        SceneManager.LoadScene(sceneName);
+        SceneManager.LoadScene("TopicCarSpawning");
     }
 
     private IEnumerator FadeGroup(CanvasGroup group, float targetAlpha)
