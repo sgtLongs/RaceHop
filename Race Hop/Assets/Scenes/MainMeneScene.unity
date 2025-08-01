@@ -2643,7 +2643,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 11878ec1f7506d54e8124a481ae9aeaf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  fadePanel: {fileID: 0}
+  fadePanel: {fileID: 1036500603}
   fadeDuration: 1
 --- !u!1 &2007995005
 GameObject:
@@ -2672,9 +2672,8 @@ RectTransform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 1661863016}
-  m_Father: {fileID: 1072723612}
+  m_Children: []
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
@@ -2988,3 +2987,4 @@ SceneRoots:
   - {fileID: 203875021}
   - {fileID: 258052276}
   - {fileID: 1358584495}
+  - {fileID: 2007995006}
