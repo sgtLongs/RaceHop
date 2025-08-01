@@ -67,7 +67,7 @@ public class SceneManagerController : MonoBehaviour
     private IEnumerator FadeAndSwitchScenes(string sceneName)
     {
         yield return StartCoroutine(FadeGroup(fadeCanvasGroup, 1));
-        SceneManager.LoadScene(sceneName);
+        SceneManager.LoadScene("TopicCarSpawning");
     }
 
     private IEnumerator FadeGroup(CanvasGroup group, float targetAlpha)
