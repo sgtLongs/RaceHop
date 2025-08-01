@@ -29,7 +29,7 @@ public class SceneManagerController : MonoBehaviour
 
     public void OnStartButtonPressed()
     {
-        FadeToScene("GameScene"); // replace with your actual scene name
+        FadeToScene("TopicCarSpawning"); // replace with your actual scene name
     }
 
     public void OnExitButtonPressed()
